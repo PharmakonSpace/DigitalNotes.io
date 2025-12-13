@@ -419,7 +419,7 @@
 
   <script>
     // === REPLACE WITH YOUR ACTUAL WEB APP URL ===
-    const API_URL = "https://script.google.com/macros/s/AKfycbyTdeDxoXcu06G6IJVLaYHYNPIEjfwrvge-YHe1mRwwddBs5ms3WjPFPaVwMOzsNT9tAQ/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycby_mj2mS1kZDTUqaD6t3OWYYS7D6Z-lmdF7FBCNEzmmZEOsd2_nK38MhtmwhfTg4LG1jg/exec";
 
     // Core Data & State
     let db = { batches: {} };
@@ -514,7 +514,7 @@
         return;
       }
       
-      if (!confirm(`Save ${pendingCount} attendance change(s) to Data?\n\nNote: Duplicate entries for same student+date will be overwritten.`)) {
+      if (!confirm(`Save ${pendingCount} attendance change(s) to Google Sheets?\n\nNote: Duplicate entries for same student+date will be overwritten.`)) {
         return;
       }
       
@@ -653,7 +653,7 @@
         populateQuickPastBatchSelect();
         if (currentBatch) renderAttendanceTable();
         
-        if (!silent) showToast('Data loaded from DataBase', 'success');
+        if (!silent) showToast('Data loaded from Google Sheets', 'success');
       } catch (e) {
         console.error("Server load error:", e);
         loadLocalData();
@@ -678,13 +678,13 @@
         if (batch.attendance) {
           Object.keys(batch.attendance).forEach(date => {
             const dateAttendance = batch.attendance[date];
-            if (typeof dateAttendance === 'object' && dateAttendance !== null) {
-              const uniqueEntries = {};
-              Object.keys(dateAttendance).forEach(student => {
-                uniqueEntries[student] = dateAttendance[student];
-              });
-              batch.attendance[date] = uniqueEntries;
-            }
+            const uniqueEntries = {};
+            
+            Object.keys(dateAttendance).forEach(student => {
+              uniqueEntries[student] = dateAttendance[student];
+            });
+            
+            batch.attendance[date] = uniqueEntries;
           });
         }
       });
