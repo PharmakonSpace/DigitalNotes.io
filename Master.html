@@ -199,20 +199,24 @@
 
     // Generic API call
     async function fetchAPI(action, params = {}, postData = null) {
-      const url = new URL(API_URL);
-      url.searchParams.append('action', action);
-      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+  const url = new URL(API_URL);
+  url.searchParams.append('action', action);
+  Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
 
-      const options = {
-        method: postData ? 'POST' : 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      };
-      if (postData) options.body = JSON.stringify(postData);
+  const options = {
+    method: postData ? 'POST' : 'GET',
+    redirect: 'follow',
+    headers: postData ? { 'Content-Type': 'text/plain' } : {}  // ← This avoids CORS preflight issues
+  };
+  if (postData) options.body = JSON.stringify(postData);
 
-      const res = await fetch(url, options);
-      if (!res.ok) throw new Error("Network error");
-      return await res.json();
-    }
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`HTTP ${res.status}: ${text}`);
+  }
+  return await res.json();
+}
 
     // Load all data from Google Sheets
     async function loadData() {
@@ -561,3 +565,4 @@
   </script>
 </body>
 </html>
+
