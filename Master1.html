@@ -514,7 +514,7 @@
         return;
       }
       
-      if (!confirm(`Save ${pendingCount} attendance change(s) to Google Sheets?\n\nNote: Duplicate entries for same student+date will be overwritten.`)) {
+      if (!confirm(`Save ${pendingCount} attendance change(s) to Data?\n\nNote: Duplicate entries for same student+date will be overwritten.`)) {
         return;
       }
       
@@ -653,7 +653,7 @@
         populateQuickPastBatchSelect();
         if (currentBatch) renderAttendanceTable();
         
-        if (!silent) showToast('Data loaded from Google Sheets', 'success');
+        if (!silent) showToast('Data loaded from DataBase', 'success');
       } catch (e) {
         console.error("Server load error:", e);
         loadLocalData();
