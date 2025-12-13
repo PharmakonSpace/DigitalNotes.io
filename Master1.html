@@ -48,10 +48,96 @@
     @keyframes fadeOut {
       to { opacity: 0; transform: translateX(-100%); }
     }
-    /* Status cycling button animation */
-    .status-btn { transition: all 0.2s ease; }
-    .status-btn:hover { transform: scale(1.05); }
-    .status-btn:active { transform: scale(0.95); }
+    /* Status selector styles */
+    .status-selector {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .status-option {
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 2px solid transparent;
+      min-width: 100px;
+      justify-content: center;
+    }
+    .status-option:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .status-option.selected {
+      border-color: #333;
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+    }
+    .status-option:not(.selected) {
+      background-color: #e5e7eb !important;
+      color: #6b7280 !important;
+      opacity: 0.7;
+    }
+    .status-option:not(.selected):hover {
+      opacity: 0.9;
+    }
+    .status-present.selected { background-color: #10b981; color: white; }
+    .status-late.selected { background-color: #f59e0b; color: white; }
+    .status-absent.selected { background-color: #ef4444; color: white; }
+    /* Selected row highlight */
+    .selected-row {
+      background-color: rgba(59, 130, 246, 0.05) !important;
+      position: relative;
+    }
+    .selected-row::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 4px;
+      background-color: #3b82f6;
+    }
+    /* Pending changes indicator */
+    .pending-changes {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      z-index: 9998;
+    }
+    .save-indicator {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.7; }
+      100% { opacity: 1; }
+    }
+    /* Calendar icon animation */
+    .calendar-icon {
+      transition: all 0.3s ease;
+    }
+    .calendar-icon:hover {
+      transform: scale(1.1);
+      color: #3b82f6;
+    }
+    /* Edit history styles */
+    .history-item {
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      background: #f8fafc;
+      border-left: 4px solid #3b82f6;
+    }
+    .history-item.updated {
+      border-left-color: #f59e0b;
+    }
+    .history-item.saved {
+      border-left-color: #10b981;
+    }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-slate-900 dark:via-purple-950 dark:to-pink-950">
@@ -69,7 +155,7 @@
       <button onclick="login()" class="btn btn-primary w-full">Login as Teacher</button>
       <p class="text-xs text-gray-500 mt-6">
         Default: <code>teacher</code> / <code>fluentx123</code><br>
-        <strong class="text-green-600">Real-time sync • Full Edit/Delete • Mobile Friendly</strong>
+        <strong class="text-green-600">Manual Save • Calendar Past • No Duplicates</strong>
       </p>
     </div>
   </div>
@@ -83,8 +169,16 @@
     <div id="syncIndicator" class="auto-save no-print">
       <div class="alert alert-success shadow-lg w-auto flex items-center gap-2">
         <i class="fas fa-cloud"></i>
-        <span>Sync Active (Queue: <span id="queueCount">0</span>)</span>
-        <button onclick="manualSync()" class="btn btn-xs btn-ghost">Sync Now</button>
+        <span>Ready to Save</span>
+        <button onclick="saveAllChanges()" class="btn btn-xs btn-success">Save All Now</button>
+      </div>
+    </div>
+
+    <!-- Pending Changes Indicator -->
+    <div id="pendingChangesIndicator" class="pending-changes no-print hidden">
+      <div class="alert alert-warning shadow-lg w-auto flex items-center gap-2 save-indicator">
+        <i class="fas fa-exclamation-circle"></i>
+        <span id="pendingCount">0</span> pending changes
       </div>
     </div>
 
@@ -97,8 +191,11 @@
       <div class="flex-none gap-2">
         <a href="index.html" class="btn btn-info btn-sm">Student Lessons</a>
         <button onclick="openReportsModal()" class="btn btn-success">Reports</button>
-        <!-- Changed: Calendar icon for Past button -->
-        <button onclick="openFillPastModal()" class="btn btn-info btn-sm"><i class="fas fa-calendar-days"></i> Fill Past</button>
+        <!-- Calendar Icon for Quick Past Attendance -->
+        <button onclick="openQuickPastModal()" class="btn btn-info btn-sm calendar-icon" title="Mark Past Attendance">
+          <i class="fas fa-calendar-days"></i> Mark Past
+        </button>
+        <button onclick="openEditPastModal()" class="btn btn-warning btn-sm"><i class="fas fa-edit"></i> Edit Past</button>
         <button onclick="openChangePasswordModal()" class="btn btn-warning btn-sm">Change Password</button>
         <button onclick="logout()" class="btn btn-ghost btn-sm">Logout</button>
       </div>
@@ -107,7 +204,12 @@
     <div class="pt-20 p-4 max-w-7xl mx-auto">
       <div class="flex justify-between items-center mb-6">
         <button id="addBatchBtn" class="btn btn-primary text-lg">New Batch</button>
-        <button onclick="exportAllToCSV()" class="btn btn-success text-lg">Export CSV</button>
+        <div class="flex gap-2">
+          <button onclick="saveAllChanges()" class="btn btn-success text-lg" id="saveAllBtn">
+            <i class="fas fa-save"></i> Save All Changes
+          </button>
+          <button onclick="exportAllToCSV()" class="btn btn-secondary text-lg">Export CSV</button>
+        </div>
       </div>
 
       <div id="batchTabs" class="tabs tabs-boxed glass mb-6 flex flex-wrap gap-2 justify-center"></div>
@@ -169,18 +271,82 @@
     </div>
   </div>
 
-  <input type="checkbox" id="pastAttendanceModal" class="modal-toggle" />
+  <!-- NEW: Quick Past Attendance Modal -->
+  <input type="checkbox" id="quickPastModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass max-w-4xl relative">
-      <label for="pastAttendanceModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
-      <h3 class="font-bold text-xl mb-4">Fill Past Attendance</h3>
+      <label for="quickPastModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-xl mb-6 text-center">
+        <i class="fas fa-calendar-days text-blue-500 mr-2"></i>
+        Mark Past Attendance
+      </h3>
+      
       <div class="flex gap-4 items-end mb-6">
-        <input type="date" id="pastDatePicker" class="input input-bordered flex-1" />
-        <button onclick="loadPastAttendance()" class="btn btn-primary">Load & Edit</button>
+        <div class="flex-1">
+          <label class="label">
+            <span class="label-text font-bold">Select Date</span>
+          </label>
+          <input type="date" id="quickPastDate" class="input input-bordered w-full" 
+                 max="${new Date().toISOString().split('T')[0]}" />
+        </div>
+        <div class="flex-1">
+          <label class="label">
+            <span class="label-text font-bold">Select Batch</span>
+          </label>
+          <select id="quickPastBatch" class="select select-bordered w-full" onchange="loadQuickPastStudents()">
+            <option value="">Select Batch</option>
+          </select>
+        </div>
+        <button onclick="loadQuickPastAttendance()" class="btn btn-primary">
+          <i class="fas fa-search mr-2"></i> Load
+        </button>
       </div>
-      <div id="pastAttendanceTable" class="mb-6"></div>
+      
+      <div id="quickPastTable" class="mb-6">
+        <p class="text-center py-8 text-gray-500">Select a date and batch to mark past attendance</p>
+      </div>
+      
+      <div id="quickPastHistory" class="mb-6 hidden">
+        <h4 class="font-bold text-lg mb-3">Changes to Save:</h4>
+        <div id="quickPastHistoryContent" class="space-y-2 max-h-40 overflow-y-auto"></div>
+      </div>
+      
       <div class="modal-action">
-        <button onclick="savePastAttendance()" class="btn btn-success">Save This Date</button>
+        <button onclick="saveQuickPastAttendance()" class="btn btn-success">
+          <i class="fas fa-save mr-2"></i> Save Past Attendance
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Past Attendance Modal -->
+  <input type="checkbox" id="editPastModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass max-w-6xl max-h-screen overflow-y-auto relative">
+      <label for="editPastModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-2xl mb-6 text-center">Edit Past Attendance</h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <select id="editPastBatchSelect" class="select select-bordered" onchange="loadEditPastDates()">
+          <option value="">Select Batch</option>
+        </select>
+        <select id="editPastDateSelect" class="select select-bordered" onchange="loadEditPastAttendance()">
+          <option value="">Select Date</option>
+        </select>
+        <input type="date" id="editPastNewDate" class="input input-bordered" placeholder="Or enter new date" />
+      </div>
+      
+      <div id="editPastTable" class="mb-6">
+        <p class="text-center py-8 text-gray-500">Select a batch and date to edit attendance</p>
+      </div>
+      
+      <div id="editHistory" class="mb-6 hidden">
+        <h4 class="font-bold text-lg mb-3">Changes to Save:</h4>
+        <div id="editHistoryContent" class="space-y-2 max-h-40 overflow-y-auto"></div>
+      </div>
+      
+      <div class="modal-action">
+        <button onclick="saveEditPastAttendance()" class="btn btn-success">Save Changes</button>
       </div>
     </div>
   </div>
@@ -263,22 +429,145 @@
     let TEACHER_PASSWORD = "fluentx123";
     let tempEditBatchOldName = null;
     let tempEditStudentOldName = null;
+    let selectedRow = null;
+    let pendingChanges = {};
+    let pendingCount = 0;
+    let editPastChanges = {};
+    let quickPastChanges = {};
 
     // ============================
-    // 1. BACKGROUND SYNC QUEUE SYSTEM
+    // 1. MANUAL SAVE SYSTEM
     // ============================
-    const syncQueue = [];
-    const MAX_RETRIES = 3;
-    let isSyncing = false;
-    let online = navigator.onLine;
+    function updatePendingChanges(student, status, date = null) {
+      if (!currentBatch && !date) return;
+      
+      const useDate = date || new Date().toISOString().split('T')[0];
+      const useBatch = currentBatch;
+      
+      if (!useBatch) return;
+      
+      if (!pendingChanges[useBatch]) pendingChanges[useBatch] = {};
+      if (!pendingChanges[useBatch][useDate]) pendingChanges[useBatch][useDate] = {};
+      
+      pendingChanges[useBatch][useDate][student] = status;
+      
+      updatePendingCount();
+    }
 
-    // Load initial data from localStorage
+    function updatePendingCount() {
+      pendingCount = 0;
+      Object.keys(pendingChanges).forEach(batch => {
+        Object.keys(pendingChanges[batch]).forEach(date => {
+          pendingCount += Object.keys(pendingChanges[batch][date]).length;
+        });
+      });
+      
+      updatePendingIndicator();
+    }
+
+    function clearPendingChanges() {
+      pendingChanges = {};
+      pendingCount = 0;
+      updatePendingIndicator();
+    }
+
+    function updatePendingIndicator() {
+      const indicator = document.getElementById('pendingChangesIndicator');
+      const countEl = document.getElementById('pendingCount');
+      const saveBtn = document.getElementById('saveAllBtn');
+      const syncIndicator = document.getElementById('syncIndicator');
+      
+      if (countEl) countEl.textContent = pendingCount;
+      
+      if (indicator) {
+        if (pendingCount > 0) {
+          indicator.classList.remove('hidden');
+          if (saveBtn) {
+            saveBtn.innerHTML = `<i class="fas fa-save"></i> Save (${pendingCount})`;
+            saveBtn.classList.add('btn-warning');
+            saveBtn.classList.remove('btn-success');
+          }
+          if (syncIndicator) {
+            const alertEl = syncIndicator.querySelector('.alert');
+            alertEl.className = 'alert alert-warning shadow-lg w-auto flex items-center gap-2';
+            alertEl.innerHTML = `<i class="fas fa-exclamation-circle"></i><span>${pendingCount} pending change(s)</span><button onclick="saveAllChanges()" class="btn btn-xs btn-success">Save Now</button>`;
+          }
+        } else {
+          indicator.classList.add('hidden');
+          if (saveBtn) {
+            saveBtn.innerHTML = `<i class="fas fa-save"></i> Save All Changes`;
+            saveBtn.classList.remove('btn-warning');
+            saveBtn.classList.add('btn-success');
+          }
+          if (syncIndicator) {
+            const alertEl = syncIndicator.querySelector('.alert');
+            alertEl.className = 'alert alert-success shadow-lg w-auto flex items-center gap-2';
+            alertEl.innerHTML = `<i class="fas fa-cloud"></i><span>All changes saved</span><button onclick="saveAllChanges()" class="btn btn-xs btn-ghost">Save</button>`;
+          }
+        }
+      }
+    }
+
+    async function saveAllChanges() {
+      if (pendingCount === 0) {
+        showToast('No changes to save', 'info');
+        return;
+      }
+      
+      if (!confirm(`Save ${pendingCount} attendance change(s) to Google Sheets?\n\nNote: Duplicate entries for same student+date will be overwritten.`)) {
+        return;
+      }
+      
+      try {
+        showToast('Saving changes...', 'info');
+        
+        for (const batchName in pendingChanges) {
+          for (const date in pendingChanges[batchName]) {
+            const attendance = pendingChanges[batchName][date];
+            
+            if (!db.batches[batchName]) {
+              db.batches[batchName] = { students: [], attendance: {} };
+            }
+            
+            if (!db.batches[batchName].attendance) {
+              db.batches[batchName].attendance = {};
+            }
+            if (!db.batches[batchName].attendance[date]) {
+              db.batches[batchName].attendance[date] = {};
+            }
+            
+            Object.keys(attendance).forEach(student => {
+              db.batches[batchName].attendance[date][student] = attendance[student];
+            });
+            
+            await fetchAPI('markAttendance', {}, {
+              batch: batchName,
+              date: date,
+              attendance: db.batches[batchName].attendance[date]
+            });
+          }
+        }
+        
+        saveLocalData();
+        clearPendingChanges();
+        
+        if (currentBatch) renderAttendanceTable();
+        
+        showToast(`${pendingCount} change(s) saved successfully!`, 'success');
+      } catch (error) {
+        console.error('Save failed:', error);
+        showToast('Save failed: ' + error.message, 'error');
+      }
+    }
+
+    // ============================
+    // 2. LOCAL STORAGE FUNCTIONS
+    // ============================
     function loadLocalData() {
       const saved = localStorage.getItem('sgFluentXAttendance');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          // Merge with existing db, but don't overwrite if empty
           if (parsed.batches && Object.keys(parsed.batches).length > 0) {
             db.batches = parsed.batches;
           }
@@ -288,87 +577,12 @@
       }
     }
 
-    // Save data to localStorage
     function saveLocalData() {
       localStorage.setItem('sgFluentXAttendance', JSON.stringify(db));
     }
 
-    // Queue a sync operation
-    function queueSync(action, params = {}, postData = null, retryCount = 0) {
-      syncQueue.push({ action, params, postData, retryCount });
-      updateSyncIndicator();
-      processSyncQueue();
-    }
-
-    // Process the sync queue
-    async function processSyncQueue() {
-      if (isSyncing || syncQueue.length === 0 || !online) return;
-      
-      isSyncing = true;
-      const item = syncQueue.shift();
-      
-      try {
-        await fetchAPI(item.action, item.params, item.postData);
-        showToast('Synced to Google Sheets', 'success');
-      } catch (error) {
-        console.error('Sync failed:', error);
-        
-        // Retry logic
-        if (item.retryCount < MAX_RETRIES) {
-          item.retryCount++;
-          syncQueue.unshift(item); // Put back at front
-          showToast(`Sync failed, retrying... (${item.retryCount}/${MAX_RETRIES})`, 'warning');
-          setTimeout(processSyncQueue, 5000); // Retry after 5 seconds
-        } else {
-          showToast('Sync failed after multiple attempts. Data saved locally.', 'error');
-        }
-      } finally {
-        isSyncing = false;
-        updateSyncIndicator();
-        if (syncQueue.length > 0) {
-          setTimeout(processSyncQueue, 1000); // Process next item
-        }
-      }
-    }
-
-    // Update sync indicator
-    function updateSyncIndicator() {
-      const queueCountEl = document.getElementById('queueCount');
-      const indicatorEl = document.getElementById('syncIndicator');
-      
-      if (queueCountEl) queueCountEl.textContent = syncQueue.length;
-      
-      if (indicatorEl) {
-        const alertEl = indicatorEl.querySelector('.alert');
-        if (!online) {
-          alertEl.className = 'alert alert-error shadow-lg w-auto flex items-center gap-2';
-          alertEl.innerHTML = '<i class="fas fa-cloud-slash"></i><span>Offline (Queue: ' + syncQueue.length + ')</span>';
-        } else if (syncQueue.length > 0) {
-          alertEl.className = 'alert alert-warning shadow-lg w-auto flex items-center gap-2';
-          alertEl.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i><span>Syncing (Queue: ' + syncQueue.length + ')</span>';
-        } else {
-          alertEl.className = 'alert alert-success shadow-lg w-auto flex items-center gap-2';
-          alertEl.innerHTML = '<i class="fas fa-cloud"></i><span>All changes synced</span>';
-        }
-      }
-    }
-
-    // Network status monitoring
-    window.addEventListener('online', () => {
-      online = true;
-      showToast('Back online, resuming sync...', 'info');
-      updateSyncIndicator();
-      processSyncQueue();
-    });
-
-    window.addEventListener('offline', () => {
-      online = false;
-      showToast('Offline - changes saved locally', 'warning');
-      updateSyncIndicator();
-    });
-
     // ============================
-    // 2. TOAST NOTIFICATION SYSTEM
+    // 3. TOAST NOTIFICATION SYSTEM
     // ============================
     function showToast(message, type = 'info') {
       const container = document.querySelector('.toast-container');
@@ -377,7 +591,6 @@
       const toast = document.createElement('div');
       toast.className = `toast toast-${type}`;
       
-      // Icons for different toast types
       const icons = {
         success: 'fa-check-circle',
         info: 'fa-info-circle',
@@ -392,7 +605,6 @@
       
       container.appendChild(toast);
       
-      // Auto-remove after animation
       setTimeout(() => {
         if (toast.parentNode) {
           toast.parentNode.removeChild(toast);
@@ -401,7 +613,7 @@
     }
 
     // ============================
-    // 3. API FUNCTION (ORIGINAL VERSION)
+    // 4. API FUNCTION
     // ============================
     async function fetchAPI(action, params = {}, postData = null) {
       const url = new URL(API_URL);
@@ -424,104 +636,571 @@
     }
 
     // ============================
-    // 4. FIXED LOAD DATA FUNCTION
+    // 5. LOAD DATA FUNCTION
     // ============================
     async function loadData(silent = false) {
       try {
         const result = await fetchAPI('getAll');
         if (result.error) throw new Error(result.error);
         
-        // ORIGINAL LOGIC - This matches your original code
         db.batches = result || { batches: {} };
+        cleanDuplicateData();
         
-        // Save to localStorage
         saveLocalData();
         
         renderBatches();
         populateReportSelects();
+        populateQuickPastBatchSelect();
         if (currentBatch) renderAttendanceTable();
         
         if (!silent) showToast('Data loaded from Google Sheets', 'success');
       } catch (e) {
         console.error("Server load error:", e);
-        
-        // Fallback to local data
         loadLocalData();
         
-        // Only show UI if we have data
         if (Object.keys(db.batches).length > 0) {
           renderBatches();
           populateReportSelects();
+          populateQuickPastBatchSelect();
           if (currentBatch) renderAttendanceTable();
           
           if (!silent) showToast('Using local cached data', 'warning');
         } else {
-          // No data at all - show empty state
           renderBatches();
           if (!silent) showToast('Could not load data. Please check connection.', 'error');
         }
       }
     }
 
+    function cleanDuplicateData() {
+      Object.keys(db.batches).forEach(batchName => {
+        const batch = db.batches[batchName];
+        if (batch.attendance) {
+          Object.keys(batch.attendance).forEach(date => {
+            const dateAttendance = batch.attendance[date];
+            const uniqueEntries = {};
+            
+            Object.keys(dateAttendance).forEach(student => {
+              uniqueEntries[student] = dateAttendance[student];
+            });
+            
+            batch.attendance[date] = uniqueEntries;
+          });
+        }
+      });
+    }
+
     async function manualSync() {
       await loadData();
-      showToast('Manual sync completed', 'info');
+      showToast('Data refreshed', 'info');
     }
 
     // ============================
-    // 5. ATTENDANCE MARKING WITH LOCAL FIRST
+    // 6. QUICK PAST ATTENDANCE (CALENDAR ICON)
     // ============================
-    async function markStatus(student, status) {
-      const today = new Date().toISOString().split('T')[0];
+    function openQuickPastModal() {
+      document.getElementById('quickPastModal').checked = true;
+      quickPastChanges = {};
       
-      // Ensure attendance object exists
-      if (!db.batches[currentBatch].attendance) {
-        db.batches[currentBatch].attendance = {};
+      // Set default date to yesterday
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      document.getElementById('quickPastDate').value = yesterday.toISOString().split('T')[0];
+      
+      // Populate batch dropdown
+      populateQuickPastBatchSelect();
+      
+      document.getElementById('quickPastTable').innerHTML = '<p class="text-center py-8 text-gray-500">Select a date and batch to mark past attendance</p>';
+      document.getElementById('quickPastHistory').classList.add('hidden');
+    }
+
+    function populateQuickPastBatchSelect() {
+      const select = document.getElementById('quickPastBatch');
+      if (!select) return;
+      
+      select.innerHTML = '<option value="">Select Batch</option>';
+      Object.keys(db.batches || {}).sort().forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name; opt.textContent = name;
+        select.appendChild(opt);
+      });
+    }
+
+    function loadQuickPastStudents() {
+      // Clear previous data when batch changes
+      quickPastChanges = {};
+      document.getElementById('quickPastHistory').classList.add('hidden');
+    }
+
+    function loadQuickPastAttendance() {
+      const batchName = document.getElementById('quickPastBatch').value;
+      const date = document.getElementById('quickPastDate').value;
+      
+      if (!batchName || !date) {
+        showToast('Please select both date and batch', 'error');
+        return;
       }
-      if (!db.batches[currentBatch].attendance[today]) {
-        db.batches[currentBatch].attendance[today] = {};
+      
+      if (new Date(date) > new Date()) {
+        showToast('Cannot mark attendance for future dates', 'error');
+        return;
       }
       
-      // Update local data
-      db.batches[currentBatch].attendance[today][student] = status;
+      const batch = db.batches[batchName];
+      if (!batch) {
+        showToast('Selected batch not found', 'error');
+        return;
+      }
       
-      // 1. Update UI instantly
-      renderAttendanceTable();
+      // Get existing attendance for the date
+      const existingAttendance = (batch.attendance || {})[date] || {};
       
-      // 2. Save to localStorage
-      saveLocalData();
+      // Reset quick past changes
+      quickPastChanges = {};
+      updateQuickPastHistory();
       
-      // 3. Queue for background sync
-      queueSync('markAttendance', {}, {
-        batch: currentBatch,
-        date: today,
-        attendance: db.batches[currentBatch].attendance[today]
+      const html = `
+        <h4 class="font-bold text-lg mb-4">
+          <i class="fas fa-calendar-day mr-2"></i>
+          ${batchName} - ${new Date(date).toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}
+        </h4>
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Student Name</th>
+                <th>Current Status</th>
+                <th>Mark Attendance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(batch.students || []).map(s => {
+                const currentStatus = existingAttendance[s] || 'not marked';
+                const currentStatusText = currentStatus === 'not marked' ? 'Not Marked' : 
+                                         currentStatus === 'present' ? 'Present' :
+                                         currentStatus === 'late' ? 'Late' : 'Absent';
+                const currentStatusClass = currentStatus === 'not marked' ? 'badge-ghost' :
+                                          currentStatus === 'present' ? 'badge-success' :
+                                          currentStatus === 'late' ? 'badge-warning' : 'badge-error';
+                
+                const newStatus = quickPastChanges[s] || currentStatus;
+                
+                return `
+                <tr>
+                  <td class="font-medium">${s}</td>
+                  <td>
+                    <span class="badge ${currentStatusClass}">
+                      ${currentStatusText}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="status-selector">
+                      <div class="status-option status-present ${newStatus === 'present' ? 'selected' : ''}" 
+                           data-status="present" 
+                           onclick="setQuickPastStatus('${s}', 'present', '${currentStatus}')">
+                        <i class="fas fa-check"></i> Present
+                      </div>
+                      <div class="status-option status-late ${newStatus === 'late' ? 'selected' : ''}" 
+                           data-status="late" 
+                           onclick="setQuickPastStatus('${s}', 'late', '${currentStatus}')">
+                        <i class="fas fa-clock"></i> Late
+                      </div>
+                      <div class="status-option status-absent ${newStatus === 'absent' ? 'selected' : ''}" 
+                           data-status="absent" 
+                           onclick="setQuickPastStatus('${s}', 'absent', '${currentStatus}')">
+                        <i class="fas fa-times"></i> Absent
+                      </div>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4 p-4 bg-blue-50 rounded-lg">
+          <p class="text-sm text-blue-700">
+            <i class="fas fa-calendar-alt mr-2"></i>
+            <strong>Marking Past Attendance:</strong> Use this to mark attendance for days you forgot to record.
+            Each student can have only one attendance record per date.
+          </p>
+        </div>`;
+      
+      document.getElementById('quickPastTable').innerHTML = html;
+    }
+
+    function setQuickPastStatus(student, newStatus, currentStatus) {
+      const batchName = document.getElementById('quickPastBatch').value;
+      const date = document.getElementById('quickPastDate').value;
+      
+      if (!batchName || !date) return;
+      
+      // Don't track if status hasn't changed
+      if (newStatus === currentStatus) {
+        delete quickPastChanges[student];
+      } else {
+        quickPastChanges[student] = newStatus;
+      }
+      
+      // Update UI
+      const rows = document.querySelectorAll('#quickPastTable tr');
+      rows.forEach(row => {
+        const nameCell = row.querySelector('td.font-medium');
+        if (nameCell && nameCell.textContent === student) {
+          const statusOptions = row.querySelectorAll('.status-option');
+          statusOptions.forEach(option => {
+            option.classList.remove('selected');
+            if (option.dataset.status === newStatus) {
+              option.classList.add('selected');
+            }
+          });
+        }
       });
       
-      showToast(`${student}: ${status}`, 'success');
+      updateQuickPastHistory();
+    }
+
+    function updateQuickPastHistory() {
+      const historyEl = document.getElementById('quickPastHistory');
+      const historyContent = document.getElementById('quickPastHistoryContent');
+      
+      if (Object.keys(quickPastChanges).length === 0) {
+        historyEl.classList.add('hidden');
+        return;
+      }
+      
+      historyEl.classList.remove('hidden');
+      historyContent.innerHTML = '';
+      
+      Object.keys(quickPastChanges).forEach(student => {
+        const div = document.createElement('div');
+        div.className = 'history-item updated';
+        div.innerHTML = `<strong>${student}</strong>: ${quickPastChanges[student]}`;
+        historyContent.appendChild(div);
+      });
+    }
+
+    async function saveQuickPastAttendance() {
+      const batchName = document.getElementById('quickPastBatch').value;
+      const date = document.getElementById('quickPastDate').value;
+      
+      if (!batchName || !date) {
+        showToast('Please select both date and batch', 'error');
+        return;
+      }
+      
+      if (Object.keys(quickPastChanges).length === 0) {
+        showToast('No changes to save for past attendance', 'info');
+        return;
+      }
+      
+      if (!confirm(`Save ${Object.keys(quickPastChanges).length} attendance record(s) for ${new Date(date).toLocaleDateString()}?\n\nThis will overwrite any existing entries for these students.`)) {
+        return;
+      }
+      
+      try {
+        showToast('Saving past attendance...', 'info');
+        
+        // Get current attendance for the date
+        const batch = db.batches[batchName];
+        if (!batch.attendance) batch.attendance = {};
+        if (!batch.attendance[date]) batch.attendance[date] = {};
+        
+        // Apply changes
+        Object.keys(quickPastChanges).forEach(student => {
+          batch.attendance[date][student] = quickPastChanges[student];
+        });
+        
+        // Save to Google Sheets
+        await fetchAPI('markAttendance', {}, {
+          batch: batchName,
+          date: date,
+          attendance: batch.attendance[date]
+        });
+        
+        // Also add to pending changes for today's UI
+        Object.keys(quickPastChanges).forEach(student => {
+          updatePendingChanges(student, quickPastChanges[student], date);
+        });
+        
+        // Save to localStorage
+        saveLocalData();
+        
+        // Clear quick past changes
+        quickPastChanges = {};
+        
+        // Update UI
+        updateQuickPastHistory();
+        showToast('Past attendance saved successfully!', 'success');
+        
+        // Close modal
+        document.getElementById('quickPastModal').checked = false;
+        
+      } catch (error) {
+        console.error('Quick past save failed:', error);
+        showToast('Save failed: ' + error.message, 'error');
+      }
     }
 
     // ============================
-    // 6. CYCLE STATUS FUNCTION
+    // 7. EDIT PAST ATTENDANCE FUNCTIONS
     // ============================
-    function cycleStatus(student) {
+    function openEditPastModal() {
+      document.getElementById('editPastModal').checked = true;
+      editPastChanges = {};
+      populateEditPastBatchSelect();
+      document.getElementById('editPastDateSelect').innerHTML = '<option value="">Select Date</option>';
+      document.getElementById('editPastNewDate').value = '';
+      document.getElementById('editPastTable').innerHTML = '<p class="text-center py-8 text-gray-500">Select a batch and date to edit attendance</p>';
+      document.getElementById('editHistory').classList.add('hidden');
+    }
+
+    function populateEditPastBatchSelect() {
+      const select = document.getElementById('editPastBatchSelect');
+      select.innerHTML = '<option value="">Select Batch</option>';
+      Object.keys(db.batches || {}).sort().forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name; opt.textContent = name;
+        select.appendChild(opt);
+      });
+    }
+
+    function loadEditPastDates() {
+      const batchName = document.getElementById('editPastBatchSelect').value;
+      const dateSelect = document.getElementById('editPastDateSelect');
+      dateSelect.innerHTML = '<option value="">Select Date</option>';
+      
+      if (batchName && db.batches[batchName] && db.batches[batchName].attendance) {
+        const dates = Object.keys(db.batches[batchName].attendance).sort().reverse();
+        dates.forEach(date => {
+          const opt = document.createElement('option');
+          opt.value = date;
+          opt.textContent = new Date(date).toLocaleDateString('en-IN', {weekday:'short', year:'numeric', month:'short', day:'numeric'});
+          dateSelect.appendChild(opt);
+        });
+      }
+    }
+
+    function loadEditPastAttendance() {
+      const batchName = document.getElementById('editPastBatchSelect').value;
+      const date = document.getElementById('editPastDateSelect').value;
+      const newDate = document.getElementById('editPastNewDate').value;
+      
+      if (!batchName) {
+        showToast('Please select a batch first', 'error');
+        return;
+      }
+      
+      const editDate = date || newDate;
+      if (!editDate) {
+        showToast('Please select or enter a date', 'error');
+        return;
+      }
+      
+      const batch = db.batches[batchName];
+      if (!batch) return;
+      
+      const attendance = (batch.attendance || {})[editDate] || {};
+      
+      editPastChanges = {};
+      updateEditHistory();
+      
+      const html = `
+        <h4 class="font-bold text-lg mb-4">Editing: ${batchName} - ${new Date(editDate).toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</h4>
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr><th>Student Name</th><th>Current Status</th><th>New Status</th></tr>
+            </thead>
+            <tbody>
+              ${(batch.students || []).map(s => {
+                const currentStatus = attendance[s] || 'absent';
+                return `
+                <tr>
+                  <td class="font-medium">${s}</td>
+                  <td>
+                    <span class="badge ${currentStatus === 'present' ? 'badge-success' : currentStatus === 'late' ? 'badge-warning' : 'badge-error'}">
+                      ${currentStatus === 'present' ? 'Present' : currentStatus === 'late' ? 'Late' : 'Absent'}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="status-selector">
+                      <div class="status-option status-present ${editPastChanges[s] === 'present' ? 'selected' : ''}" 
+                           data-status="present" 
+                           onclick="setEditPastStatus('${s}', 'present', '${currentStatus}')">
+                        <i class="fas fa-check"></i> Present
+                      </div>
+                      <div class="status-option status-late ${editPastChanges[s] === 'late' ? 'selected' : ''}" 
+                           data-status="late" 
+                           onclick="setEditPastStatus('${s}', 'late', '${currentStatus}')">
+                        <i class="fas fa-clock"></i> Late
+                      </div>
+                      <div class="status-option status-absent ${editPastChanges[s] === 'absent' ? 'selected' : ''}" 
+                           data-status="absent" 
+                           onclick="setEditPastStatus('${s}', 'absent', '${currentStatus}')">
+                        <i class="fas fa-times"></i> Absent
+                      </div>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4 p-4 bg-yellow-50 rounded-lg">
+          <p class="text-sm text-yellow-700">
+            <i class="fas fa-info-circle mr-2"></i>
+            <strong>Note:</strong> Changing status here will overwrite the existing entry for this date.
+            One student can have only one attendance record per date.
+          </p>
+        </div>`;
+      
+      document.getElementById('editPastTable').innerHTML = html;
+    }
+
+    function setEditPastStatus(student, newStatus, currentStatus) {
+      const batchName = document.getElementById('editPastBatchSelect').value;
+      const date = document.getElementById('editPastDateSelect').value;
+      const newDate = document.getElementById('editPastNewDate').value;
+      const editDate = date || newDate;
+      
+      if (!batchName || !editDate) return;
+      
+      if (newStatus === currentStatus) {
+        delete editPastChanges[student];
+      } else {
+        editPastChanges[student] = newStatus;
+      }
+      
+      const rows = document.querySelectorAll('#editPastTable tr');
+      rows.forEach(row => {
+        const nameCell = row.querySelector('td.font-medium');
+        if (nameCell && nameCell.textContent === student) {
+          const statusOptions = row.querySelectorAll('.status-option');
+          statusOptions.forEach(option => {
+            option.classList.remove('selected');
+            if (option.dataset.status === newStatus) {
+              option.classList.add('selected');
+            }
+          });
+        }
+      });
+      
+      updateEditHistory();
+    }
+
+    function updateEditHistory() {
+      const historyEl = document.getElementById('editHistory');
+      const historyContent = document.getElementById('editHistoryContent');
+      
+      if (Object.keys(editPastChanges).length === 0) {
+        historyEl.classList.add('hidden');
+        return;
+      }
+      
+      historyEl.classList.remove('hidden');
+      historyContent.innerHTML = '';
+      
+      Object.keys(editPastChanges).forEach(student => {
+        const div = document.createElement('div');
+        div.className = 'history-item updated';
+        div.innerHTML = `<strong>${student}</strong>: ${editPastChanges[student]}`;
+        historyContent.appendChild(div);
+      });
+    }
+
+    async function saveEditPastAttendance() {
+      const batchName = document.getElementById('editPastBatchSelect').value;
+      const date = document.getElementById('editPastDateSelect').value;
+      const newDate = document.getElementById('editPastNewDate').value;
+      
+      if (!batchName) {
+        showToast('Please select a batch', 'error');
+        return;
+      }
+      
+      const editDate = date || newDate;
+      if (!editDate) {
+        showToast('Please select or enter a date', 'error');
+        return;
+      }
+      
+      if (Object.keys(editPastChanges).length === 0) {
+        showToast('No changes to save', 'info');
+        return;
+      }
+      
+      if (!confirm(`Save ${Object.keys(editPastChanges).length} edit(s) for ${new Date(editDate).toLocaleDateString()}?\n\nExisting entries will be overwritten.`)) {
+        return;
+      }
+      
+      try {
+        showToast('Saving edits...', 'info');
+        
+        const batch = db.batches[batchName];
+        if (!batch.attendance) batch.attendance = {};
+        if (!batch.attendance[editDate]) batch.attendance[editDate] = {};
+        
+        Object.keys(editPastChanges).forEach(student => {
+          batch.attendance[editDate][student] = editPastChanges[student];
+        });
+        
+        await fetchAPI('markAttendance', {}, {
+          batch: batchName,
+          date: editDate,
+          attendance: batch.attendance[editDate]
+        });
+        
+        saveLocalData();
+        editPastChanges = {};
+        updateEditHistory();
+        showToast('Past attendance edited successfully!', 'success');
+        loadEditPastAttendance();
+        
+      } catch (error) {
+        console.error('Edit save failed:', error);
+        showToast('Edit save failed: ' + error.message, 'error');
+      }
+    }
+
+    // ============================
+    // 8. ATTENDANCE MARKING (MANUAL SAVE)
+    // ============================
+    function markStatus(student, status, rowIndex) {
+      if (!currentBatch) return;
+      
       const today = new Date().toISOString().split('T')[0];
-      const currentStatus = (db.batches[currentBatch].attendance[today] || {})[student] || 'absent';
+      const existingStatus = pendingChanges[currentBatch]?.[today]?.[student];
       
-      // Define the cycle order
-      const statusCycle = {
-        'absent': 'present',
-        'present': 'late',
-        'late': 'early',
-        'early': 'absent'
-      };
+      if (existingStatus === status) {
+        showToast(`${student} already marked as ${status}`, 'info');
+        return;
+      }
       
-      const nextStatus = statusCycle[currentStatus];
-      markStatus(student, nextStatus);
+      updatePendingChanges(student, status);
+      updateStatusDisplay(student, status, rowIndex);
+      
+      showToast(`${student}: ${status} (pending save)`, 'info');
+    }
+
+    function updateStatusDisplay(student, status, rowIndex) {
+      const row = document.querySelector(`tr[data-student="${student}"]`);
+      if (!row) return;
+      
+      const statusOptions = row.querySelectorAll('.status-option');
+      statusOptions.forEach(option => {
+        option.classList.remove('selected');
+        if (option.dataset.status === status) {
+          option.classList.add('selected');
+        }
+      });
+      
+      document.querySelectorAll('tr.selected-row').forEach(r => r.classList.remove('selected-row'));
+      row.classList.add('selected-row');
+      selectedRow = rowIndex;
     }
 
     // ============================
-    // 7. RENDER ATTENDANCE TABLE
+    // 9. RENDER ATTENDANCE TABLE
     // ============================
     async function renderAttendanceTable() {
       if (!currentBatch) return;
@@ -538,80 +1217,122 @@
             <button onclick="deleteCurrentBatch()" class="btn btn-error btn-sm">Delete Batch</button>
           </div>
         </div>
+        <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="font-bold text-blue-700">Today: ${new Date().toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</span>
+              <button onclick="openQuickPastModal()" class="btn btn-xs btn-info ml-4">
+                <i class="fas fa-calendar-days mr-1"></i> Forgot a day?
+              </button>
+            </div>
+            <div class="flex gap-4">
+              <div class="flex items-center gap-2">
+                <div class="status-option status-present selected"><i class="fas fa-check"></i> Present</div>
+                <span class="text-sm">= Full attendance</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="status-option status-late"><i class="fas fa-clock"></i> Late</div>
+                <span class="text-sm">= Arrived late</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="status-option status-absent"><i class="fas fa-times"></i> Absent</div>
+                <span class="text-sm">= Not present</span>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="overflow-x-auto">
-          <table class="table table-zebra">
+          <table class="table">
             <thead>
               <tr>
-                <th>#</th>
+                <th class="w-16">#</th>
                 <th>Student Name</th>
-                <th>Actions</th>
-                <th>Status (Today - Click to Cycle)</th>
+                <th class="w-32">Actions</th>
+                <th class="w-96">Attendance Status</th>
               </tr>
             </thead>
             <tbody>
               ${(batch.students || []).map((s, i) => {
                 const st = ((batch.attendance || {})[today] || {})[s] || 'absent';
-                
-                // Determine button style based on status
-                const statusConfig = {
-                  'present': { class: 'btn-success', icon: 'fa-check', label: 'Present' },
-                  'late': { class: 'btn-warning', icon: 'fa-clock', label: 'Late' },
-                  'early': { class: 'btn-secondary', icon: 'fa-arrow-right-from-bracket', label: 'Early Leave' },
-                  'absent': { class: 'btn-error', icon: 'fa-times', label: 'Absent' }
-                };
-                
-                const config = statusConfig[st] || statusConfig.absent;
+                const isSelected = selectedRow === i ? 'selected-row' : '';
+                const pendingStatus = pendingChanges[currentBatch]?.[today]?.[s];
+                const displayStatus = pendingStatus || st;
                 
                 return `
-                <tr>
-                  <td>${i+1}</td>
-                  <td class="font-medium">${s}</td>
+                <tr data-student="${s}" data-row="${i}" class="${isSelected}">
+                  <td class="font-bold">${i+1}</td>
+                  <td class="font-medium text-lg">${s}</td>
                   <td class="flex gap-1">
                     <button class="btn btn-xs btn-ghost" onclick="openEditStudentModal('${s}')"><i class="fas fa-edit"></i></button>
                     <button class="btn btn-xs btn-ghost text-error" onclick="deleteStudent('${s}')"><i class="fas fa-trash"></i></button>
                   </td>
                   <td>
-                    <button class="btn status-btn ${config.class} w-32" onclick="cycleStatus('${s}')">
-                      <i class="fas ${config.icon} mr-2"></i>
-                      ${config.label}
-                    </button>
+                    <div class="status-selector">
+                      <div class="status-option status-present ${displayStatus === 'present' ? 'selected' : ''}" 
+                           data-status="present" 
+                           onclick="markStatus('${s}', 'present', ${i})">
+                        <i class="fas fa-check"></i> Present
+                      </div>
+                      <div class="status-option status-late ${displayStatus === 'late' ? 'selected' : ''}" 
+                           data-status="late" 
+                           onclick="markStatus('${s}', 'late', ${i})">
+                        <i class="fas fa-clock"></i> Late
+                      </div>
+                      <div class="status-option status-absent ${displayStatus === 'absent' ? 'selected' : ''}" 
+                           data-status="absent" 
+                           onclick="markStatus('${s}', 'absent', ${i})">
+                        <i class="fas fa-times"></i> Absent
+                      </div>
+                    </div>
                   </td>
                 </tr>`;
               }).join('')}
             </tbody>
           </table>
         </div>
-        <div class="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <p class="text-sm text-blue-700 dark:text-blue-300">
-            <i class="fas fa-info-circle mr-2"></i>
-            <strong>Tip:</strong> Click on any student's status button to cycle through: Present → Late → Early Leave → Absent
-          </p>
+        <div class="mt-8 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+          <div class="flex items-center justify-between">
+            <div>
+              <i class="fas fa-info-circle text-yellow-600 mr-2"></i>
+              <span class="font-bold text-yellow-700">Manual Save Required:</span>
+              <span class="text-yellow-600 ml-2">Changes are saved locally until you click "Save All Changes"</span>
+            </div>
+            <button onclick="saveAllChanges()" class="btn btn-warning">
+              <i class="fas fa-save"></i> Save Changes
+            </button>
+          </div>
+          <div class="mt-2 text-sm text-yellow-600">
+            <i class="fas fa-shield-alt mr-1"></i>
+            <strong>Duplicate Protection:</strong> Each student can have only one attendance record per date. New entries overwrite old ones.
+          </div>
         </div>`;
         
       document.getElementById('attendanceSection').innerHTML = html;
+      updatePendingIndicator();
     }
 
     // ============================
-    // 8. BATCH/STUDENT OPERATIONS
+    // 10. BATCH/STUDENT OPERATIONS
     // ============================
     async function createBatch() {
       const name = document.getElementById('newBatchName').value.trim();
       if (!name) return showToast("Enter batch name", "error");
       if (db.batches[name]) return showToast("Batch already exists", "error");
 
-      // Update local data
       db.batches[name] = { students: [], attendance: {} };
       saveLocalData();
       
-      // Queue sync
-      queueSync('createBatch', { batch: name });
+      try {
+        await fetchAPI('createBatch', { batch: name });
+        showToast(`Batch "${name}" created and saved`, 'success');
+      } catch (e) {
+        showToast(`Batch created locally (save failed)`, 'warning');
+      }
       
-      // Update UI
       await loadData(true);
       selectBatch(name);
       document.getElementById('newBatchName').value = '';
       document.getElementById('batchModal').checked = false;
-      showToast(`Batch "${name}" created`, 'success');
     }
 
     async function addStudent() {
@@ -619,27 +1340,27 @@
       const name = document.getElementById('newStudentName').value.trim();
       if (!name) return showToast("Enter student name", "error");
 
-      // Initialize students array if it doesn't exist
       if (!db.batches[currentBatch].students) {
         db.batches[currentBatch].students = [];
       }
       
-      // Update local data
       db.batches[currentBatch].students.push(name);
       saveLocalData();
       
-      // Queue sync
-      queueSync('addStudent', {}, { batch: currentBatch, student: name });
+      try {
+        await fetchAPI('addStudent', {}, { batch: currentBatch, student: name });
+        showToast(`${name} added and saved`, 'success');
+      } catch (e) {
+        showToast(`${name} added locally (save failed)`, 'warning');
+      }
       
-      // Update UI
       renderAttendanceTable();
       document.getElementById('newStudentName').value = '';
       document.getElementById('studentModal').checked = false;
-      showToast(`${name} added to ${currentBatch}`, 'success');
     }
 
     // ============================
-    // 9. LOGIN & LOGOUT FUNCTIONS
+    // 11. LOGIN & LOGOUT FUNCTIONS
     // ============================
     function login() {
       const user = document.getElementById('username').value.trim();
@@ -648,10 +1369,7 @@
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('mainApp').classList.remove('hidden');
         
-        // First load from local storage (fast)
         loadLocalData();
-        
-        // Then load from server (may take time)
         loadData(true);
         
         showToast('Login successful', 'success');
@@ -661,9 +1379,17 @@
     }
 
     function logout() {
+      if (pendingCount > 0) {
+        if (!confirm(`You have ${pendingCount} unsaved changes. Logout without saving?`)) {
+          return;
+        }
+      }
+      
       if (confirm("Logout?")) {
         document.getElementById('mainApp').classList.add('hidden');
         document.getElementById('loginScreen').classList.remove('hidden');
+        selectedRow = null;
+        clearPendingChanges();
         showToast('Logged out', 'info');
       }
     }
@@ -672,28 +1398,30 @@
       if (!currentBatch) return;
       if (!confirm(`Delete batch "${currentBatch}" and ALL its data permanently?`)) return;
 
-      // Remove from local data
       delete db.batches[currentBatch];
       saveLocalData();
       
-      // Queue sync
-      queueSync('deleteBatch', { batch: currentBatch });
+      try {
+        await fetchAPI('deleteBatch', { batch: currentBatch });
+        showToast(`Batch deleted and saved`, 'success');
+      } catch (e) {
+        showToast(`Batch deleted locally (save failed)`, 'warning');
+      }
       
-      // Update UI
       currentBatch = null;
+      selectedRow = null;
+      clearPendingChanges();
       renderBatches();
       document.getElementById('attendanceSection').innerHTML = `
         <div class="text-center py-20">
           <i class="fas fa-users text-6xl text-gray-300 mb-4"></i>
           <p class="text-lg">Select a batch to manage attendance</p>
         </div>`;
-      showToast(`Batch deleted`, 'success');
     }
 
     async function deleteStudent(studentName) {
       if (!confirm(`Remove "${studentName}" from this batch?`)) return;
 
-      // Remove from local data
       const batch = db.batches[currentBatch];
       if (batch && batch.students) {
         const index = batch.students.indexOf(studentName);
@@ -703,12 +1431,15 @@
         }
       }
       
-      // Queue sync
-      queueSync('deleteStudent', {}, { batch: currentBatch, student: studentName });
+      try {
+        await fetchAPI('deleteStudent', {}, { batch: currentBatch, student: studentName });
+        showToast(`${studentName} removed and saved`, 'success');
+      } catch (e) {
+        showToast(`${studentName} removed locally (save failed)`, 'warning');
+      }
       
-      // Update UI
+      selectedRow = null;
       renderAttendanceTable();
-      showToast(`${studentName} removed`, 'success');
     }
 
     function changePassword() {
@@ -726,7 +1457,7 @@
     }
 
     // ============================
-    // 10. ORIGINAL FUNCTIONS (UPDATED WITH TOAST)
+    // 12. ORIGINAL FUNCTIONS
     // ============================
     function openEditBatchModal(oldName) {
       tempEditBatchOldName = oldName;
@@ -742,20 +1473,23 @@
       }
       if (db.batches[newName]) return showToast("Batch name already exists", "error");
 
-      // Update local data
       db.batches[newName] = db.batches[tempEditBatchOldName];
       delete db.batches[tempEditBatchOldName];
       saveLocalData();
       
-      // Queue sync
-      queueSync('renameBatch', {}, { oldName: tempEditBatchOldName, newName: newName });
+      try {
+        await fetchAPI('renameBatch', {}, { oldName: tempEditBatchOldName, newName: newName });
+        showToast(`Batch renamed and saved`, 'success');
+      } catch (e) {
+        showToast(`Batch renamed locally (save failed)`, 'warning');
+      }
       
-      // Update UI
       if (currentBatch === tempEditBatchOldName) currentBatch = newName;
+      selectedRow = null;
+      clearPendingChanges();
       renderBatches();
       if (currentBatch) renderAttendanceTable();
       document.getElementById('editBatchModal').checked = false;
-      showToast(`Batch renamed to "${newName}"`, 'success');
     }
 
     function openEditStudentModal(oldName) {
@@ -771,14 +1505,12 @@
         return;
       }
 
-      // Update local data
       const batch = db.batches[currentBatch];
       if (batch && batch.students) {
         const index = batch.students.indexOf(tempEditStudentOldName);
         if (index > -1) {
           batch.students[index] = newName;
           
-          // Update attendance records
           if (batch.attendance) {
             Object.keys(batch.attendance).forEach(date => {
               if (batch.attendance[date] && batch.attendance[date][tempEditStudentOldName] !== undefined) {
@@ -792,17 +1524,21 @@
         }
       }
       
-      // Queue sync
-      queueSync('renameStudent', {}, {
-        batch: currentBatch,
-        oldName: tempEditStudentOldName,
-        newName: newName
-      });
+      try {
+        await fetchAPI('renameStudent', {}, {
+          batch: currentBatch,
+          oldName: tempEditStudentOldName,
+          newName: newName
+        });
+        showToast(`Student renamed and saved`, 'success');
+      } catch (e) {
+        showToast(`Student renamed locally (save failed)`, 'warning');
+      }
       
-      // Update UI
+      selectedRow = null;
+      clearPendingChanges();
       renderAttendanceTable();
       document.getElementById('editStudentModal').checked = false;
-      showToast(`Student renamed to "${newName}"`, 'success');
     }
 
     function renderBatches() {
@@ -832,108 +1568,21 @@
     }
 
     async function selectBatch(name) {
+      if (pendingCount > 0 && currentBatch !== name) {
+        if (!confirm(`You have ${pendingCount} unsaved changes. Switch batch without saving?`)) {
+          return;
+        }
+      }
+      
       currentBatch = name;
+      selectedRow = null;
       renderBatches();
       renderAttendanceTable();
     }
 
-    function openFillPastModal() {
-      document.getElementById('pastDatePicker').value = new Date().toISOString().split('T')[0];
-      document.getElementById('pastAttendanceModal').checked = true;
-      document.getElementById('pastAttendanceTable').innerHTML = '<p class="text-center py-8 text-gray-500">Select a date and click Load</p>';
-    }
-
-    async function loadPastAttendance() {
-      const date = document.getElementById('pastDatePicker').value;
-      if (!date || !currentBatch) return showToast("Select batch and date", "error");
-      currentEditDate = date;
-
-      try {
-        const result = await fetchAPI('getAttendance', { batch: currentBatch, date });
-        const record = result.attendance || {};
-
-        // Update local data
-        if (!db.batches[currentBatch].attendance) {
-          db.batches[currentBatch].attendance = {};
-        }
-        db.batches[currentBatch].attendance[date] = record;
-        saveLocalData();
-      } catch (e) {
-        showToast("Could not load from server, using local data", "warning");
-      }
-
-      const batch = db.batches[currentBatch];
-      const record = (batch.attendance || {})[date] || {};
-      
-      const html = `<h4 class="font-bold text-lg mb-4">Editing: ${new Date(date).toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</h4>
-        <div class="overflow-x-auto">
-          <table class="table table-zebra">
-            <thead>
-              <tr><th>Name</th><th>Status (Click to Cycle)</th></tr>
-            </thead>
-            <tbody>
-              ${(batch.students || []).map(s => {
-                const st = record[s] || 'absent';
-                const statusConfig = {
-                  'present': { class: 'btn-success', icon: 'fa-check', label: 'Present', next: 'late' },
-                  'late': { class: 'btn-warning', icon: 'fa-clock', label: 'Late', next: 'early' },
-                  'early': { class: 'btn-secondary', icon: 'fa-arrow-right-from-bracket', label: 'Early Leave', next: 'absent' },
-                  'absent': { class: 'btn-error', icon: 'fa-times', label: 'Absent', next: 'present' }
-                };
-                const config = statusConfig[st] || statusConfig.absent;
-                
-                return `<tr>
-                  <td class="font-medium">${s}</td>
-                  <td>
-                    <button class="btn status-btn ${config.class} w-32" onclick="setPastStatus('${s}', '${config.next}')">
-                      <i class="fas ${config.icon} mr-2"></i>
-                      ${config.label}
-                    </button>
-                  </td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>`;
-      document.getElementById('pastAttendanceTable').innerHTML = html;
-    }
-
-    window.setPastStatus = async function(student, nextStatus) {
-      if (!currentBatch || !currentEditDate) return;
-      
-      if (!db.batches[currentBatch].attendance) {
-        db.batches[currentBatch].attendance = {};
-      }
-      db.batches[currentBatch].attendance[currentEditDate] = db.batches[currentBatch].attendance[currentEditDate] || {};
-      db.batches[currentBatch].attendance[currentEditDate][student] = nextStatus;
-      saveLocalData();
-      
-      // Queue sync
-      queueSync('markAttendance', {}, {
-        batch: currentBatch,
-        date: currentEditDate,
-        attendance: db.batches[currentBatch].attendance[currentEditDate]
-      });
-      
-      // Reload the display
-      await loadPastAttendance();
-      showToast(`${student}: ${nextStatus}`, 'success');
-    };
-
-    async function savePastAttendance() {
-      if (!currentBatch || !currentEditDate) return;
-      
-      // Queue sync (already done in setPastStatus, but ensure final sync)
-      queueSync('markAttendance', {}, {
-        batch: currentBatch,
-        date: currentEditDate,
-        attendance: db.batches[currentBatch].attendance[currentEditDate]
-      });
-      
-      showToast("Saved for " + currentEditDate, 'success');
-      document.getElementById('pastAttendanceModal').checked = false;
-    }
-
+    // ============================
+    // 13. REPORTS FUNCTIONS
+    // ============================
     async function openReportsModal() {
       document.getElementById('reportsModal').checked = true;
       await populateReportSelects();
@@ -992,25 +1641,23 @@
                           <th>Student</th>
                           <th>Present</th>
                           <th>Late</th>
-                          <th>Early</th>
                           <th>Absent</th>
                           <th>% Attendance</th>
                         </tr>
                       </thead>
                       <tbody>`;
       (batch.students || []).forEach(s => {
-        let p=0,l=0,e=0,a=0;
+        let p=0,l=0,a=0;
         dates.forEach(d => {
           const st = ((batch.attendance || {})[d] || {})[s] || 'absent';
-          if(st==='present')p++; else if(st==='late')l++; else if(st==='early')e++; else a++;
+          if(st==='present')p++; else if(st==='late')l++; else a++;
         });
-        const total = p+l+e+a;
-        const perc = total ? Math.round((p + l*0.8 + e*0.9)/total * 100) : 0;
+        const total = p+l+a;
+        const perc = total ? Math.round((p + l*0.8)/total * 100) : 0;
         html += `<tr>
           <td><span class="student-link" onclick="showIndividualReport('${batchName}','${s}')">${s}</span></td>
           <td class="text-success font-bold">${p}</td>
           <td class="text-warning">${l}</td>
-          <td class="text-secondary">${e}</td>
           <td class="text-error">${a}</td>
           <td><span class="badge ${perc>=90?'badge-success':perc>=75?'badge-warning':'badge-error'}">${perc}%</span></td>
         </tr>`;
@@ -1053,8 +1700,8 @@
         html += `<tr><td class="font-medium">${new Date(d).toLocaleDateString('en-IN')}</td>`;
         (batch.students || []).forEach(s => {
           const st = ((batch.attendance || {})[d] || {})[s] || 'absent';
-          const icon = st==='present'?'P':st==='late'?'L':st==='early'?'E':'A';
-          const color = st==='present'?'text-success':st==='late'?'text-warning':st==='early'?'text-secondary':'text-error';
+          const icon = st==='present'?'P':st==='late'?'L':'A';
+          const color = st==='present'?'text-success':st==='late'?'text-warning':'text-error';
           html += `<td class="${color} text-center font-bold">${icon}</td>`;
         });
         html += `</tr>`;
@@ -1068,20 +1715,19 @@
       if (!batch) return;
       
       const dates = Object.keys(batch.attendance || {}).sort().reverse();
-      let p=0,l=0,e=0,a=0;
+      let p=0,l=0,a=0;
       dates.forEach(d => {
         const st = ((batch.attendance || {})[d] || {})[studentName] || 'absent';
-        if(st==='present')p++; else if(st==='late')l++; else if(st==='early')e++; else a++;
+        if(st==='present')p++; else if(st==='late')l++; else a++;
       });
       
-      const total = p+l+e+a;
-      const perc = total ? Math.round((p + l*0.8 + e*0.9)/total * 100) : 0;
+      const total = p+l+a;
+      const perc = total ? Math.round((p + l*0.8)/total * 100) : 0;
       
       let table = `<h3 class="text-3xl font-bold mb-4">${studentName}'s Report - ${batchName}</h3>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">`;
+      <div class="grid grid-cols-3 gap-4 mb-6">`;
       table += `<div class="stat glass"><div class="stat-title">Present</div><div class="stat-value text-success">${p}</div></div>
       <div class="stat glass"><div class="stat-title">Late</div><div class="stat-value text-warning">${l}</div></div>
-      <div class="stat glass"><div class="stat-title">Early Leave</div><div class="stat-value text-secondary">${e}</div></div>
       <div class="stat glass"><div class="stat-title">Absent</div><div class="stat-value text-error">${a}</div></div></div>
       <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
         <div class="flex items-center justify-between">
@@ -1100,8 +1746,8 @@
           <tbody>`;
       dates.forEach(d => {
         const st = ((batch.attendance || {})[d] || {})[studentName] || 'absent';
-        const display = st==='present'?'Present':st==='late'?'Late':st==='early'?'Early Leave':'Absent';
-        const color = st==='present'?'badge-success':st==='late'?'badge-warning':st==='early'?'badge-secondary':'badge-error';
+        const display = st==='present'?'Present':st==='late'?'Late':'Absent';
+        const color = st==='present'?'badge-success':st==='late'?'badge-warning':'badge-error';
         table += `<tr>
           <td>${new Date(d).toLocaleDateString()}</td>
           <td>${new Date(d).toLocaleString('en-US',{weekday:'long'})}</td>
@@ -1120,7 +1766,7 @@
         Object.keys(b.attendance || {}).forEach(d => {
           (b.students || []).forEach(s => {
             const st = ((b.attendance || {})[d] || {})[s] || 'absent';
-            const text = st === 'present' ? 'Present' : st === 'late' ? 'Late' : st === 'early' ? 'Early Leave' : 'Absent';
+            const text = st === 'present' ? 'Present' : st === 'late' ? 'Late' : 'Absent';
             csv += `"${bn}","${d}","${s}","${text}"\n`;
           });
         });
@@ -1134,26 +1780,23 @@
     }
 
     // ============================
-    // 11. INITIALIZATION
+    // 14. INITIALIZATION
     // ============================
     document.getElementById('addBatchBtn').onclick = () => document.getElementById('batchModal').checked = true;
 
-    // Initialize sync indicator
-    updateSyncIndicator();
+    // Initialize indicators
+    updatePendingIndicator();
 
-    // Start sync queue processing
-    setInterval(processSyncQueue, 5000);
-
-    // Auto-sync every 30 seconds when tab is visible
+    // Auto-refresh data every 5 minutes
     window.onload = () => {
-      updateSyncIndicator();
+      updatePendingIndicator();
       
       setInterval(async () => {
         if (document.visibilityState === 'visible' && 
             !document.getElementById('mainApp').classList.contains('hidden')) {
           await loadData(true);
         }
-      }, 30000);
+      }, 300000); // 5 minutes
     };
 
   </script>
