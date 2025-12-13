@@ -33,7 +33,7 @@
       <button onclick="login()" class="btn btn-primary w-full">Login as Teacher</button>
       <p class="text-xs text-gray-500 mt-6">
         Default: <code>teacher</code> / <code>fluentx123</code><br>
-        <strong class="text-green-600">Real-time sync • Full Edit/Delete • Mobile Friendly</strong>
+        <strong class="text-green-600">Real-time sync • Bulk Update • Calendar View</strong>
       </p>
     </div>
   </div>
@@ -58,7 +58,9 @@
       <div class="flex-none gap-2">
         <a href="index.html" class="btn btn-info btn-sm">Student Lessons</a>
         <button onclick="openReportsModal()" class="btn btn-success">Reports</button>
-        <button onclick="openFillPastModal()" class="btn btn-info btn-sm">Past</button>
+        <button onclick="openCalendarModal()" class="btn btn-primary btn-sm">
+          <i class="fas fa-calendar-alt mr-1"></i> Calendar View
+        </button>
         <button onclick="openChangePasswordModal()" class="btn btn-warning btn-sm">Change Password</button>
         <button onclick="logout()" class="btn btn-ghost btn-sm">Logout</button>
       </div>
@@ -80,7 +82,28 @@
     </div>
   </div>
 
-  <!-- Modals -->
+  <!-- Calendar Modal with Bulk Update -->
+  <input type="checkbox" id="calendarModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass max-w-5xl max-h-screen overflow-y-auto relative">
+      <label for="calendarModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-2xl mb-6 text-center">
+        <i class="fas fa-calendar-alt mr-2"></i> Attendance Calendar
+      </h3>
+
+      <div class="flex justify-center mb-6 gap-4 items-center">
+        <button onclick="changeCalendarMonth(-1)" class="btn btn-outline btn-sm"><i class="fas fa-chevron-left"></i></button>
+        <h4 id="calendarMonthYear" class="text-xl font-bold w-48 text-center"></h4>
+        <button onclick="changeCalendarMonth(1)" class="btn btn-outline btn-sm"><i class="fas fa-chevron-right"></i></button>
+      </div>
+
+      <div id="calendarGrid" class="grid grid-cols-7 gap-2 mb-6"></div>
+
+      <div id="selectedDateAttendance" class="mt-8"></div>
+    </div>
+  </div>
+
+  <!-- Batch Modals -->
   <input type="checkbox" id="batchModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass relative">
@@ -105,6 +128,7 @@
     </div>
   </div>
 
+  <!-- Student Modals -->
   <input type="checkbox" id="studentModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass relative">
@@ -129,22 +153,7 @@
     </div>
   </div>
 
-  <input type="checkbox" id="pastAttendanceModal" class="modal-toggle" />
-  <div class="modal" role="dialog">
-    <div class="modal-box glass max-w-4xl relative">
-      <label for="pastAttendanceModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
-      <h3 class="font-bold text-xl mb-4">Fill Past Attendance</h3>
-      <div class="flex gap-4 items-end mb-6">
-        <input type="date" id="pastDatePicker" class="input input-bordered flex-1" />
-        <button onclick="loadPastAttendance()" class="btn btn-primary">Load & Edit</button>
-      </div>
-      <div id="pastAttendanceTable" class="mb-6"></div>
-      <div class="modal-action">
-        <button onclick="savePastAttendance()" class="btn btn-success">Save This Date</button>
-      </div>
-    </div>
-  </div>
-
+  <!-- Change Password Modal -->
   <input type="checkbox" id="changePasswordModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass relative">
@@ -212,17 +221,20 @@
   </div>
 
   <script>
-    // === REPLACE WITH YOUR ACTUAL WEB APP URL ===
+    // === REPLACE WITH YOUR ACTUAL GOOGLE APPS SCRIPT WEB APP URL ===
     const API_URL = "https://script.google.com/macros/s/AKfycby_mj2mS1kZDTUqaD6t3OWYYS7D6Z-lmdF7FBCNEzmmZEOsd2_nK38MhtmwhfTg4LG1jg/exec";
 
     let db = { batches: {} };
     let currentBatch = null;
-    let currentEditDate = null;
     let TEACHER_USERNAME = "teacher";
-    let TEACHER_PASSWORD = "fluentx123";
+    let TEACHER_PASSWORD = "fluentx123"; // Change this if needed
 
     let tempEditBatchOldName = null;
     let tempEditStudentOldName = null;
+
+    // Calendar variables
+    let calendarDate = new Date();
+    let selectedCalendarDate = null;
 
     async function fetchAPI(action, params = {}, postData = null) {
       const url = new URL(API_URL);
@@ -252,6 +264,7 @@
         renderBatches();
         populateReportSelects();
         if (currentBatch) renderAttendanceTable();
+        if (document.getElementById('calendarModal').checked) renderCalendar();
       } catch (e) {
         if (!silent) alert("Sync error: " + e.message);
       }
@@ -468,51 +481,141 @@
       document.getElementById('changePasswordModal').checked = false;
     }
 
-    function openFillPastModal() {
-      document.getElementById('pastDatePicker').value = new Date().toISOString().split('T')[0];
-      document.getElementById('pastAttendanceModal').checked = true;
-      document.getElementById('pastAttendanceTable').innerHTML = '<p class="text-center py-8 text-gray-500">Select a date and click Load</p>';
+    // Calendar View Functions
+    function openCalendarModal() {
+      if (!currentBatch) {
+        alert("Please select a batch first!");
+        return;
+      }
+      calendarDate = new Date();
+      selectedCalendarDate = null;
+      renderCalendar();
+      document.getElementById('calendarModal').checked = true;
     }
 
-    async function loadPastAttendance() {
-      const date = document.getElementById('pastDatePicker').value;
-      if (!date || !currentBatch) return alert("Select batch and date");
-      currentEditDate = date;
+    function renderCalendar() {
+      const year = calendarDate.getFullYear();
+      const month = calendarDate.getMonth();
+      document.getElementById('calendarMonthYear').textContent = calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-      const result = await fetchAPI('getAttendance', { batch: currentBatch, date });
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      let html = '';
+      const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      weekdays.forEach(day => html += `<div class="text-center font-bold text-sm py-2">${day}</div>`);
+
+      for (let i = 0; i < firstDay; i++) html += `<div></div>`;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const attendanceDates = Object.keys(db.batches[currentBatch].attendance);
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const hasAttendance = attendanceDates.includes(dateStr);
+        const isToday = dateStr === todayStr;
+
+        html += `
+          <div class="border rounded-lg p-3 text-center cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900 transition ${isToday ? 'ring-2 ring-indigo-600 font-bold' : ''}"
+               onclick="selectCalendarDate('${dateStr}')">
+            <div class="text-lg">${day}</div>
+            ${hasAttendance ? '<i class="fas fa-check-circle text-green-600"></i>' : '<i class="fas fa-circle text-gray-300"></i>'}
+          </div>`;
+      }
+
+      document.getElementById('calendarGrid').innerHTML = html;
+    }
+
+    function changeCalendarMonth(delta) {
+      calendarDate.setMonth(calendarDate.getMonth() + delta);
+      renderCalendar();
+    }
+
+    async function selectCalendarDate(dateStr) {
+      selectedCalendarDate = dateStr;
+      const result = await fetchAPI('getAttendance', { batch: currentBatch, date: dateStr });
       const record = result.attendance || {};
 
       const batch = db.batches[currentBatch];
-      const html = `<h4 class="font-bold text-lg mb-4">Editing: ${new Date(date).toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</h4>
-        <table class="table table-zebra"><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody>
-          ${batch.students.map(s => {
-            const st = record[s] || 'absent';
-            return `<tr><td class="font-medium">${s}</td><td><div class="btn-group">
-              <button class="btn btn-xs ${st==='present'?'btn-success':''}" onclick="setPastStatus('${s}','present')">Present</button>
-              <button class="btn btn-xs ${st==='absent'?'btn-error':''}" onclick="setPastStatus('${s}','absent')">Absent</button>
-              <button class="btn btn-xs ${st==='late'?'btn-warning':''}" onclick="setPastStatus('${s}','late')">Late</button>
-              <button class="btn btn-xs ${st==='early'?'btn-secondary':''}" onclick="setPastStatus('${s}','early')">Early</button>
-            </div></td></tr>`;
-          }).join('')}
-        </tbody></table>`;
-      document.getElementById('pastAttendanceTable').innerHTML = html;
+
+      let table = `<div class="flex justify-between items-center mb-4">
+        <h4 class="font-bold text-xl">
+          ${new Date(dateStr).toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}
+        </h4>
+        <div class="flex gap-2 items-center">
+          <select id="bulkStatusSelect" class="select select-bordered select-sm">
+            <option value="present">Present</option>
+            <option value="absent">Absent</option>
+            <option value="late">Late</option>
+            <option value="early">Early</option>
+          </select>
+          <button onclick="applyBulkStatus()" class="btn btn-sm btn-primary">Apply to All</button>
+        </div>
+      </div>`;
+
+      table += `<table class="table table-zebra w-full"><thead><tr><th>#</th><th>Student</th><th>Status</th></tr></thead><tbody>`;
+
+      batch.students.forEach((s, i) => {
+        const currentStatus = record[s] || 'absent';
+        table += `<tr>
+          <td>${i+1}</td>
+          <td class="font-medium">${s}</td>
+          <td><div class="btn-group">
+            <button class="btn btn-xs ${currentStatus==='present'?'btn-success':''}" onclick="toggleCalendarStatus('${s}','present')">Present</button>
+            <button class="btn btn-xs ${currentStatus==='absent'?'btn-error':''}" onclick="toggleCalendarStatus('${s}','absent')">Absent</button>
+            <button class="btn btn-xs ${currentStatus==='late'?'btn-warning':''}" onclick="toggleCalendarStatus('${s}','late')">Late</button>
+            <button class="btn btn-xs ${currentStatus==='early'?'btn-secondary':''}" onclick="toggleCalendarStatus('${s}','early')">Early</button>
+          </div></td>
+        </tr>`;
+      });
+
+      table += `</tbody></table>`;
+      document.getElementById('selectedDateAttendance').innerHTML = table;
     }
 
-    window.setPastStatus = async function(student, status) {
-      db.batches[currentBatch].attendance[currentEditDate] = db.batches[currentBatch].attendance[currentEditDate] || {};
-      db.batches[currentBatch].attendance[currentEditDate][student] = status;
-      await loadPastAttendance();
-    };
+    window.toggleCalendarStatus = async function(student, newStatus) {
+      const attendanceObj = db.batches[currentBatch].attendance[selectedCalendarDate] || {};
+      if (attendanceObj[student] === newStatus) {
+        delete attendanceObj[student];
+      } else {
+        attendanceObj[student] = newStatus;
+      }
 
-    async function savePastAttendance() {
       await fetchAPI('markAttendance', {}, {
         batch: currentBatch,
-        date: currentEditDate,
-        attendance: db.batches[currentBatch].attendance[currentEditDate]
+        date: selectedCalendarDate,
+        attendance: attendanceObj
       });
-      alert("Saved for " + currentEditDate);
-    }
 
+      await loadData(true);
+      selectCalendarDate(selectedCalendarDate);
+      renderCalendar();
+    };
+
+    window.applyBulkStatus = async function() {
+      if (!selectedCalendarDate) return;
+      const status = document.getElementById('bulkStatusSelect').value;
+      const confirmMsg = `Set ALL students to "${status.toUpperCase()}" on ${new Date(selectedCalendarDate).toLocaleDateString()}?`;
+      if (!confirm(confirmMsg)) return;
+
+      const attendanceObj = {};
+      db.batches[currentBatch].students.forEach(s => {
+        attendanceObj[s] = status;
+      });
+
+      await fetchAPI('markAttendance', {}, {
+        batch: currentBatch,
+        date: selectedCalendarDate,
+        attendance: attendanceObj
+      });
+
+      await loadData(true);
+      selectCalendarDate(selectedCalendarDate);
+      renderCalendar();
+      alert("Bulk update applied successfully!");
+    };
+
+    // Reports Functions
     async function openReportsModal() {
       document.getElementById('reportsModal').checked = true;
       await populateReportSelects();
@@ -656,9 +759,10 @@
       URL.revokeObjectURL(url);
     }
 
+    // Button handlers
     document.getElementById('addBatchBtn').onclick = () => document.getElementById('batchModal').checked = true;
 
-    // Fast auto-sync every 10 seconds (only when tab visible)
+    // Auto-sync every 10 seconds (only when tab visible)
     setInterval(async () => {
       if (document.visibilityState === 'visible' && !document.getElementById('mainApp').classList.contains('hidden')) {
         await loadData(true);
