@@ -423,30 +423,48 @@
     // ============================
     // 4. MODIFIED CORE FUNCTIONS
     // ============================
-    async function loadData(silent = false) {
+   async function loadData(silent = false) {
       try {
         // First try to get fresh data from server
         const result = await fetchAPI('getAll');
         if (result.error) throw new Error(result.error);
         
-        // Merge server data with local changes
-        db.batches = result.batches || {};
+        // IMPORTANT FIX: Handle the API response structure correctly
+        // The API returns the entire database structure
+        if (result.batches) {
+          db.batches = result.batches;
+        } else if (result.data && result.data.batches) {
+          // Alternative response structure
+          db.batches = result.data.batches;
+        } else {
+          // If structure is different, assign directly
+          db = result;
+        }
+        
+        // Save to localStorage
         saveLocalData();
         
         renderBatches();
         populateReportSelects();
         if (currentBatch) renderAttendanceTable();
         
-        if (!silent) showToast('Data refreshed from server', 'success');
+        if (!silent) showToast('Data loaded from server', 'success');
       } catch (e) {
+        console.error("Server load failed:", e);
         // Fallback to local data
         loadLocalData();
+        
+        renderBatches();
+        populateReportSelects();
+        if (currentBatch) renderAttendanceTable();
+        
         if (!silent) showToast('Using local data (server unavailable)', 'warning');
       }
     }
 
     async function manualSync() {
       await loadData();
+      showToast('Manual sync completed', 'info');
     }
 
     // ============================
@@ -612,14 +630,17 @@
     // ============================
     // 9. LOGIN & LOGOUT FUNCTIONS
     // ============================
-    function login() {
+     function login() {
       const user = document.getElementById('username').value.trim();
       const pass = document.getElementById('password').value;
       if (user === TEACHER_USERNAME && pass === TEACHER_PASSWORD) {
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('mainApp').classList.remove('hidden');
-        loadLocalData(); // Load from localStorage first
-        loadData(true); // Then try to sync with server
+        
+        // Load data properly
+        loadLocalData(); // First load from localStorage
+        loadData(true);  // Then try to sync with server
+        
         showToast('Login successful', 'success');
       } else {
         showToast("Wrong username or password!", "error");
@@ -1087,15 +1108,20 @@
     // ============================
     document.getElementById('addBatchBtn').onclick = () => document.getElementById('batchModal').checked = true;
 
+    // Initialize sync indicator immediately
+    updateSyncIndicator();
+
     // Start sync queue processing
     setInterval(processSyncQueue, 5000);
 
-    // Initial load
+    // Don't auto-load data on page load - wait for login
     window.onload = () => {
       updateSyncIndicator();
-      // Auto-sync every 30 seconds when tab is visible
+      
+      // Auto-sync every 30 seconds when tab is visible AND user is logged in
       setInterval(async () => {
-        if (document.visibilityState === 'visible' && !document.getElementById('mainApp').classList.contains('hidden')) {
+        if (document.visibilityState === 'visible' && 
+            !document.getElementById('mainApp').classList.contains('hidden')) {
           await loadData(true);
         }
       }, 30000);
