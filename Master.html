@@ -59,9 +59,9 @@
         <a href="index.html" class="btn btn-info btn-sm">Student Lessons</a>
         <button onclick="openReportsModal()" class="btn btn-success">Reports</button>
         <button onclick="openCalendarModal()" class="btn btn-primary btn-sm">
-          <i class="fas fa-calendar-alt mr-1"></i> Calendar View
+          <i class="fas fa-calendar-alt mr-1"></i> Calendar
         </button>
-        <button onclick="openChangePasswordModal()" class="btn btn-warning btn-sm">Change Password</button>
+        <button onclick="openChangePasswordModal()" class="btn btn-warning btn-sm">Password</button>
         <button onclick="logout()" class="btn btn-ghost btn-sm">Logout</button>
       </div>
     </div>
@@ -227,7 +227,7 @@
     let db = { batches: {} };
     let currentBatch = null;
     let TEACHER_USERNAME = "teacher";
-    let TEACHER_PASSWORD = "fluentx123"; // Change this if needed
+    let TEACHER_PASSWORD = "fluentx123"; // Change if needed
 
     let tempEditBatchOldName = null;
     let tempEditStudentOldName = null;
@@ -759,10 +759,8 @@
       URL.revokeObjectURL(url);
     }
 
-    // Button handlers
     document.getElementById('addBatchBtn').onclick = () => document.getElementById('batchModal').checked = true;
 
-    // Auto-sync every 10 seconds (only when tab visible)
     setInterval(async () => {
       if (document.visibilityState === 'visible' && !document.getElementById('mainApp').classList.contains('hidden')) {
         await loadData(true);
