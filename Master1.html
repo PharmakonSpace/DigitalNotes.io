@@ -277,8 +277,11 @@
       const saved = localStorage.getItem('sgFluentXAttendance');
       if (saved) {
         try {
-          db = JSON.parse(saved);
-          showToast('Local data loaded', 'info');
+          const parsed = JSON.parse(saved);
+          // Merge with existing db, but don't overwrite if empty
+          if (parsed.batches && Object.keys(parsed.batches).length > 0) {
+            db.batches = parsed.batches;
+          }
         } catch (e) {
           console.error("Failed to parse localStorage data", e);
         }
@@ -398,7 +401,7 @@
     }
 
     // ============================
-    // 3. MODIFIED API FUNCTION WITH LOCAL FIRST
+    // 3. API FUNCTION (ORIGINAL VERSION)
     // ============================
     async function fetchAPI(action, params = {}, postData = null) {
       const url = new URL(API_URL);
@@ -421,25 +424,15 @@
     }
 
     // ============================
-    // 4. MODIFIED CORE FUNCTIONS
+    // 4. FIXED LOAD DATA FUNCTION
     // ============================
-   async function loadData(silent = false) {
+    async function loadData(silent = false) {
       try {
-        // First try to get fresh data from server
         const result = await fetchAPI('getAll');
         if (result.error) throw new Error(result.error);
         
-        // IMPORTANT FIX: Handle the API response structure correctly
-        // The API returns the entire database structure
-        if (result.batches) {
-          db.batches = result.batches;
-        } else if (result.data && result.data.batches) {
-          // Alternative response structure
-          db.batches = result.data.batches;
-        } else {
-          // If structure is different, assign directly
-          db = result;
-        }
+        // ORIGINAL LOGIC - This matches your original code
+        db.batches = result || { batches: {} };
         
         // Save to localStorage
         saveLocalData();
@@ -448,17 +441,25 @@
         populateReportSelects();
         if (currentBatch) renderAttendanceTable();
         
-        if (!silent) showToast('Data loaded from server', 'success');
+        if (!silent) showToast('Data loaded from Google Sheets', 'success');
       } catch (e) {
-        console.error("Server load failed:", e);
+        console.error("Server load error:", e);
+        
         // Fallback to local data
         loadLocalData();
         
-        renderBatches();
-        populateReportSelects();
-        if (currentBatch) renderAttendanceTable();
-        
-        if (!silent) showToast('Using local data (server unavailable)', 'warning');
+        // Only show UI if we have data
+        if (Object.keys(db.batches).length > 0) {
+          renderBatches();
+          populateReportSelects();
+          if (currentBatch) renderAttendanceTable();
+          
+          if (!silent) showToast('Using local cached data', 'warning');
+        } else {
+          // No data at all - show empty state
+          renderBatches();
+          if (!silent) showToast('Could not load data. Please check connection.', 'error');
+        }
       }
     }
 
@@ -468,17 +469,20 @@
     }
 
     // ============================
-    // 5. MODIFIED ATTENDANCE MARKING
+    // 5. ATTENDANCE MARKING WITH LOCAL FIRST
     // ============================
     async function markStatus(student, status) {
       const today = new Date().toISOString().split('T')[0];
-      const attendanceObj = db.batches[currentBatch].attendance[today] || {};
-      attendanceObj[student] = status;
       
       // Ensure attendance object exists
+      if (!db.batches[currentBatch].attendance) {
+        db.batches[currentBatch].attendance = {};
+      }
       if (!db.batches[currentBatch].attendance[today]) {
         db.batches[currentBatch].attendance[today] = {};
       }
+      
+      // Update local data
       db.batches[currentBatch].attendance[today][student] = status;
       
       // 1. Update UI instantly
@@ -491,14 +495,14 @@
       queueSync('markAttendance', {}, {
         batch: currentBatch,
         date: today,
-        attendance: attendanceObj
+        attendance: db.batches[currentBatch].attendance[today]
       });
       
       showToast(`${student}: ${status}`, 'success');
     }
 
     // ============================
-    // 6. NEW: CYCLE STATUS FUNCTION
+    // 6. CYCLE STATUS FUNCTION
     // ============================
     function cycleStatus(student) {
       const today = new Date().toISOString().split('T')[0];
@@ -517,11 +521,13 @@
     }
 
     // ============================
-    // 7. MODIFIED RENDER ATTENDANCE TABLE
+    // 7. RENDER ATTENDANCE TABLE
     // ============================
     async function renderAttendanceTable() {
       if (!currentBatch) return;
       const batch = db.batches[currentBatch];
+      if (!batch) return;
+      
       const today = new Date().toISOString().split('T')[0];
 
       const html = `
@@ -543,8 +549,8 @@
               </tr>
             </thead>
             <tbody>
-              ${batch.students.map((s, i) => {
-                const st = (batch.attendance[today] || {})[s] || 'absent';
+              ${(batch.students || []).map((s, i) => {
+                const st = ((batch.attendance || {})[today] || {})[s] || 'absent';
                 
                 // Determine button style based on status
                 const statusConfig = {
@@ -586,7 +592,7 @@
     }
 
     // ============================
-    // 8. MODIFIED BATCH/STUDENT OPERATIONS
+    // 8. BATCH/STUDENT OPERATIONS
     // ============================
     async function createBatch() {
       const name = document.getElementById('newBatchName').value.trim();
@@ -613,6 +619,11 @@
       const name = document.getElementById('newStudentName').value.trim();
       if (!name) return showToast("Enter student name", "error");
 
+      // Initialize students array if it doesn't exist
+      if (!db.batches[currentBatch].students) {
+        db.batches[currentBatch].students = [];
+      }
+      
       // Update local data
       db.batches[currentBatch].students.push(name);
       saveLocalData();
@@ -630,16 +641,18 @@
     // ============================
     // 9. LOGIN & LOGOUT FUNCTIONS
     // ============================
-     function login() {
+    function login() {
       const user = document.getElementById('username').value.trim();
       const pass = document.getElementById('password').value;
       if (user === TEACHER_USERNAME && pass === TEACHER_PASSWORD) {
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('mainApp').classList.remove('hidden');
         
-        // Load data properly
-        loadLocalData(); // First load from localStorage
-        loadData(true);  // Then try to sync with server
+        // First load from local storage (fast)
+        loadLocalData();
+        
+        // Then load from server (may take time)
+        loadData(true);
         
         showToast('Login successful', 'success');
       } else {
@@ -667,8 +680,8 @@
       queueSync('deleteBatch', { batch: currentBatch });
       
       // Update UI
-      await loadData(true);
       currentBatch = null;
+      renderBatches();
       document.getElementById('attendanceSection').innerHTML = `
         <div class="text-center py-20">
           <i class="fas fa-users text-6xl text-gray-300 mb-4"></i>
@@ -681,10 +694,13 @@
       if (!confirm(`Remove "${studentName}" from this batch?`)) return;
 
       // Remove from local data
-      const index = db.batches[currentBatch].students.indexOf(studentName);
-      if (index > -1) {
-        db.batches[currentBatch].students.splice(index, 1);
-        saveLocalData();
+      const batch = db.batches[currentBatch];
+      if (batch && batch.students) {
+        const index = batch.students.indexOf(studentName);
+        if (index > -1) {
+          batch.students.splice(index, 1);
+          saveLocalData();
+        }
       }
       
       // Queue sync
@@ -735,8 +751,9 @@
       queueSync('renameBatch', {}, { oldName: tempEditBatchOldName, newName: newName });
       
       // Update UI
-      await loadData();
       if (currentBatch === tempEditBatchOldName) currentBatch = newName;
+      renderBatches();
+      if (currentBatch) renderAttendanceTable();
       document.getElementById('editBatchModal').checked = false;
       showToast(`Batch renamed to "${newName}"`, 'success');
     }
@@ -756,19 +773,23 @@
 
       // Update local data
       const batch = db.batches[currentBatch];
-      const index = batch.students.indexOf(tempEditStudentOldName);
-      if (index > -1) {
-        batch.students[index] = newName;
-        
-        // Update attendance records
-        Object.keys(batch.attendance).forEach(date => {
-          if (batch.attendance[date][tempEditStudentOldName] !== undefined) {
-            batch.attendance[date][newName] = batch.attendance[date][tempEditStudentOldName];
-            delete batch.attendance[date][tempEditStudentOldName];
+      if (batch && batch.students) {
+        const index = batch.students.indexOf(tempEditStudentOldName);
+        if (index > -1) {
+          batch.students[index] = newName;
+          
+          // Update attendance records
+          if (batch.attendance) {
+            Object.keys(batch.attendance).forEach(date => {
+              if (batch.attendance[date] && batch.attendance[date][tempEditStudentOldName] !== undefined) {
+                batch.attendance[date][newName] = batch.attendance[date][tempEditStudentOldName];
+                delete batch.attendance[date][tempEditStudentOldName];
+              }
+            });
           }
-        });
-        
-        saveLocalData();
+          
+          saveLocalData();
+        }
       }
       
       // Queue sync
@@ -779,7 +800,6 @@
       });
       
       // Update UI
-      await loadData();
       renderAttendanceTable();
       document.getElementById('editStudentModal').checked = false;
       showToast(`Student renamed to "${newName}"`, 'success');
@@ -788,11 +808,13 @@
     function renderBatches() {
       const container = document.getElementById('batchTabs');
       container.innerHTML = '';
-      const batches = Object.keys(db.batches).sort();
+      const batches = Object.keys(db.batches || {}).sort();
+      
       if (batches.length === 0) {
         container.innerHTML = '<p class="text-center text-gray-500 py-8">No batches yet. Click "New Batch" to create one!</p>';
         return;
       }
+      
       batches.forEach(name => {
         const tab = document.createElement('a');
         tab.className = `tab tab-lifted ${currentBatch === name ? 'tab-active' : ''}`;
@@ -831,6 +853,9 @@
         const record = result.attendance || {};
 
         // Update local data
+        if (!db.batches[currentBatch].attendance) {
+          db.batches[currentBatch].attendance = {};
+        }
         db.batches[currentBatch].attendance[date] = record;
         saveLocalData();
       } catch (e) {
@@ -838,7 +863,7 @@
       }
 
       const batch = db.batches[currentBatch];
-      const record = batch.attendance[date] || {};
+      const record = (batch.attendance || {})[date] || {};
       
       const html = `<h4 class="font-bold text-lg mb-4">Editing: ${new Date(date).toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</h4>
         <div class="overflow-x-auto">
@@ -847,7 +872,7 @@
               <tr><th>Name</th><th>Status (Click to Cycle)</th></tr>
             </thead>
             <tbody>
-              ${batch.students.map(s => {
+              ${(batch.students || []).map(s => {
                 const st = record[s] || 'absent';
                 const statusConfig = {
                   'present': { class: 'btn-success', icon: 'fa-check', label: 'Present', next: 'late' },
@@ -876,6 +901,9 @@
     window.setPastStatus = async function(student, nextStatus) {
       if (!currentBatch || !currentEditDate) return;
       
+      if (!db.batches[currentBatch].attendance) {
+        db.batches[currentBatch].attendance = {};
+      }
       db.batches[currentBatch].attendance[currentEditDate] = db.batches[currentBatch].attendance[currentEditDate] || {};
       db.batches[currentBatch].attendance[currentEditDate][student] = nextStatus;
       saveLocalData();
@@ -926,7 +954,7 @@
       for (const id of selects) {
         const select = document.getElementById(id);
         select.innerHTML = '<option value="">Select Batch</option>';
-        Object.keys(db.batches).sort().forEach(name => {
+        Object.keys(db.batches || {}).sort().forEach(name => {
           const opt = document.createElement('option');
           opt.value = name; opt.textContent = name;
           select.appendChild(opt);
@@ -938,7 +966,7 @@
       const batchName = document.getElementById('studentBatchSelect').value;
       const select = document.getElementById('studentSelect');
       select.innerHTML = '<option value="">Select Student</option>';
-      if (batchName && db.batches[batchName]) {
+      if (batchName && db.batches[batchName] && db.batches[batchName].students) {
         db.batches[batchName].students.forEach(s => {
           const opt = document.createElement('option');
           opt.value = s; opt.textContent = s;
@@ -949,9 +977,9 @@
 
     function generateBatchReport() {
       const batchName = document.getElementById('reportBatchSelect').value;
-      if (!batchName) return;
+      if (!batchName || !db.batches[batchName]) return;
       const batch = db.batches[batchName];
-      const dates = Object.keys(batch.attendance).sort();
+      const dates = Object.keys(batch.attendance || {}).sort();
       if (dates.length === 0) {
         document.getElementById('batchReportOutput').innerHTML = '<div class="alert alert-info">No attendance recorded</div>';
         return;
@@ -970,10 +998,10 @@
                         </tr>
                       </thead>
                       <tbody>`;
-      batch.students.forEach(s => {
+      (batch.students || []).forEach(s => {
         let p=0,l=0,e=0,a=0;
         dates.forEach(d => {
-          const st = batch.attendance[d][s] || 'absent';
+          const st = ((batch.attendance || {})[d] || {})[s] || 'absent';
           if(st==='present')p++; else if(st==='late')l++; else if(st==='early')e++; else a++;
         });
         const total = p+l+e+a;
@@ -1004,7 +1032,7 @@
       const batchName = document.getElementById('rangeBatchSelect').value;
       if (!start || !end || !batchName) return showToast("Fill all fields", "error");
       const batch = db.batches[batchName];
-      const dates = Object.keys(batch.attendance).filter(d => d >= start && d <= end).sort();
+      const dates = Object.keys(batch.attendance || {}).filter(d => d >= start && d <= end).sort();
       
       if (dates.length === 0) {
         document.getElementById('dateRangeReportOutput').innerHTML = '<div class="alert alert-info">No attendance recorded in this date range</div>';
@@ -1017,14 +1045,14 @@
                       <thead>
                         <tr>
                           <th>Date</th>
-                          ${batch.students.map(s => `<th><span class="student-link" onclick="showIndividualReport('${batchName}','${s}')">${s.split(' ')[0]}</span></th>`).join('')}
+                          ${(batch.students || []).map(s => `<th><span class="student-link" onclick="showIndividualReport('${batchName}','${s}')">${s.split(' ')[0]}</span></th>`).join('')}
                         </tr>
                       </thead>
                       <tbody>`;
       dates.forEach(d => {
         html += `<tr><td class="font-medium">${new Date(d).toLocaleDateString('en-IN')}</td>`;
-        batch.students.forEach(s => {
-          const st = batch.attendance[d][s] || 'absent';
+        (batch.students || []).forEach(s => {
+          const st = ((batch.attendance || {})[d] || {})[s] || 'absent';
           const icon = st==='present'?'P':st==='late'?'L':st==='early'?'E':'A';
           const color = st==='present'?'text-success':st==='late'?'text-warning':st==='early'?'text-secondary':'text-error';
           html += `<td class="${color} text-center font-bold">${icon}</td>`;
@@ -1037,10 +1065,12 @@
 
     function showIndividualReport(batchName, studentName) {
       const batch = db.batches[batchName];
-      const dates = Object.keys(batch.attendance).sort().reverse();
+      if (!batch) return;
+      
+      const dates = Object.keys(batch.attendance || {}).sort().reverse();
       let p=0,l=0,e=0,a=0;
       dates.forEach(d => {
-        const st = batch.attendance[d][studentName] || 'absent';
+        const st = ((batch.attendance || {})[d] || {})[studentName] || 'absent';
         if(st==='present')p++; else if(st==='late')l++; else if(st==='early')e++; else a++;
       });
       
@@ -1069,7 +1099,7 @@
           </thead>
           <tbody>`;
       dates.forEach(d => {
-        const st = batch.attendance[d][studentName] || 'absent';
+        const st = ((batch.attendance || {})[d] || {})[studentName] || 'absent';
         const display = st==='present'?'Present':st==='late'?'Late':st==='early'?'Early Leave':'Absent';
         const color = st==='present'?'badge-success':st==='late'?'badge-warning':st==='early'?'badge-secondary':'badge-error';
         table += `<tr>
@@ -1085,11 +1115,11 @@
 
     function exportAllToCSV() {
       let csv = "Batch,Date,Student,Status\n";
-      Object.keys(db.batches).forEach(bn => {
+      Object.keys(db.batches || {}).forEach(bn => {
         const b = db.batches[bn];
-        Object.keys(b.attendance).forEach(d => {
-          b.students.forEach(s => {
-            const st = b.attendance[d][s] || 'absent';
+        Object.keys(b.attendance || {}).forEach(d => {
+          (b.students || []).forEach(s => {
+            const st = ((b.attendance || {})[d] || {})[s] || 'absent';
             const text = st === 'present' ? 'Present' : st === 'late' ? 'Late' : st === 'early' ? 'Early Leave' : 'Absent';
             csv += `"${bn}","${d}","${s}","${text}"\n`;
           });
@@ -1108,17 +1138,16 @@
     // ============================
     document.getElementById('addBatchBtn').onclick = () => document.getElementById('batchModal').checked = true;
 
-    // Initialize sync indicator immediately
+    // Initialize sync indicator
     updateSyncIndicator();
 
     // Start sync queue processing
     setInterval(processSyncQueue, 5000);
 
-    // Don't auto-load data on page load - wait for login
+    // Auto-sync every 30 seconds when tab is visible
     window.onload = () => {
       updateSyncIndicator();
       
-      // Auto-sync every 30 seconds when tab is visible AND user is logged in
       setInterval(async () => {
         if (document.visibilityState === 'visible' && 
             !document.getElementById('mainApp').classList.contains('hidden')) {
