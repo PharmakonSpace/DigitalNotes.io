@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SG FluentX | Attendance System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"/>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    h1,h2,h3,h4 { font-family: 'Poppins', sans-serif; }
+    .glass { backdrop-filter: blur(16px); background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.3); }
+    .dark .glass { background: rgba(15,23,42,0.95); }
+    .student-link { cursor: pointer; color: #6366f1; font-weight: 600; text-decoration: underline; }
+    .student-link:hover { color: #4f46e5; }
+    .auto-save { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-slate-900 dark:via-purple-950 dark:to-pink-950">
+
+  <!-- Login Screen -->
+  <div id="loginScreen" class="flex items-center justify-center min-h-screen px-4">
+    <div class="glass rounded-3xl shadow-2xl p-10 max-w-md w-full text-center">
+      <i class="fas fa-graduation-cap text-6xl text-indigo-600 mb-4"></i>
+      <h1 class="text-3xl font-bold gradient-text bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+        SG FluentX Attendance
+      </h1>
+      <p class="text-sm text-gray-600 mb-6">Reading credentials from .env file...</p>
+      <input type="text" id="username" class="input input-bordered w-full mb-4" placeholder="Username" />
+      <input type="password" id="password" class="input input-bordered w-full mb-6" placeholder="Password"/>
+      <button onclick="login()" class="btn btn-primary w-full">Login as Teacher</button>
+      <p class="text-xs text-gray-500 mt-4">
+        Create <code>.env</code> file in same folder:<br>
+        USERNAME=teacher<br>PASSWORD=yourpassword
+      </p>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="mainApp" class="hidden relative">
+    <!-- Auto Save Indicator -->
+    <div class="auto-save no-print">
+      <div class="alert alert-success shadow-lg w-auto">
+        <i class="fas fa-save"></i>
+        <span>Auto Save Active</span>
+      </div>
+    </div>
+
+    <div class="navbar glass shadow-lg fixed top-0 z-50 no-print">
+      <div class="flex-1 px-4">
+        <h1 class="text-xl font-bold gradient-text bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+          SG FluentX - Attendance
+        </h1>
+      </div>
+      <div class="flex-none gap-2">
+        <button onclick="openReportsModal()" class="btn btn-success">Reports</button>
+        <button onclick="openFillPastModal()" class="btn btn-info btn-sm">Past</button>
+        <button onclick="openChangePasswordModal()" class="btn btn-warning btn-sm">Change Password</button>
+        <button onclick="manualSave()" class="btn btn-accent btn-sm">Save Now</button>
+        <button onclick="logout()" class="btn btn-ghost btn-sm">Logout</button>
+      </div>
+    </div>
+
+    <div class="pt-20 p-4 max-w-7xl mx-auto">
+      <div class="flex justify-between items-center mb-6">
+        <button id="addBatchBtn" class="btn btn-primary text-lg">New Batch</button>
+        <button onclick="exportAllToCSV()" class="btn btn-success text-lg">Export CSV</button>
+      </div>
+
+      <div id="batchTabs" class="tabs tabs-boxed glass mb-6 flex flex-wrap gap-2 justify-center"></div>
+      <div id="attendanceSection" class="glass rounded-3xl shadow-2xl p-8 min-h-screen">
+        <div class="text-center py-20">
+          <i class="fas fa-users text-6xl text-gray-300 mb-4"></i>
+          <p class="text-lg">Select a batch to manage attendance</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <input type="checkbox" id="batchModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="batchModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <h3 class="font-bold text-lg mb-4">Create New Batch</h3>
+      <input type="text" id="newBatchName" placeholder="e.g. Morning 7AM Batch" class="input input-bordered w-full" />
+      <div class="modal-action">
+        <button onclick="createBatch()" class="btn btn-primary">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="checkbox" id="studentModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="studentModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <h3 class="font-bold text-lg mb-4">Add Student to <span id="modalBatchName"></span></h3>
+      <input type="text" id="newStudentName" placeholder="Student Name" class="input input-bordered w-full" />
+      <div class="modal-action mt-4">
+        <button onclick="addStudent()" class="btn btn-primary">Add Student</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="checkbox" id="pastAttendanceModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass max-w-4xl relative">
+      <label for="pastAttendanceModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <h3 class="font-bold text-xl mb-4">Fill Past Attendance</h3>
+      <div class="flex gap-4 items-end mb-6">
+        <input type="date" id="pastDatePicker" class="input input-bordered flex-1" />
+        <button onclick="loadPastAttendance()" class="btn btn-primary">Load & Edit</button>
+      </div>
+      <div id="pastAttendanceTable" class="mb-6"></div>
+      <div class="modal-action">
+        <button onclick="savePastAttendance()" class="btn btn-success">Save This Date</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="checkbox" id="changePasswordModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="changePasswordModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <h3 class="font-bold text-lg mb-4">Change Teacher Password</h3>
+      <input type="password" id="oldPassword" placeholder="Current Password" class="input input-bordered w-full mb-3"/>
+      <input type="password" id="newPassword" placeholder="New Password" class="input input-bordered w-full mb-3"/>
+      <input type="password" id="confirmPassword" placeholder="Confirm New Password" class="input input-bordered w-full mb-4"/>
+      <div class="modal-action">
+        <button onclick="changePassword()" class="btn btn-primary w-full">Update & Download .env</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reports Modal -->
+  <input type="checkbox" id="reportsModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass max-w-6xl max-h-screen overflow-y-auto relative">
+      <label for="reportsModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <h3 class="font-bold text-2xl mb-6 text-center">Attendance Reports</h3>
+      <div class="tabs tabs-boxed mb-6">
+        <a class="tab tab-active" onclick="showReportTab('batch')">Batch Summary</a>
+        <a class="tab" onclick="showReportTab('student')">Student Report</a>
+        <a class="tab" onclick="showReportTab('range')">Date Range</a>
+      </div>
+      <div id="reportContent">
+        <div id="batchReport" class="space-y-6">
+          <select id="reportBatchSelect" class="select select-bordered w-full max-w-xs" onchange="generateBatchReport()"></select>
+          <div id="batchReportOutput" class="mt-6"></div>
+        </div>
+        <div id="studentReport" class="hidden space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <select id="studentBatchSelect" class="select select-bordered" onchange="loadStudentsForReport()"></select>
+            <select id="studentSelect" class="select select-bordered"></select>
+          </div>
+          <button onclick="generateStudentReport()" class="btn btn-primary">Generate</button>
+          <div id="studentReportOutput" class="mt-6"></div>
+        </div>
+        <div id="rangeReport" class="hidden space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input type="date" id="rangeStart" class="input input-bordered" />
+            <input type="date" id="rangeEnd" class="input input-bordered" />
+            <select id="rangeBatchSelect" class="select select-bordered"></select>
+          </div>
+          <button onclick="generateDateRangeReport()" class="btn btn-primary">Generate</button>
+          <div id="dateRangeReportOutput" class="mt-6"></div>
+        </div>
+      </div>
+      <div class="modal-action mt-6">
+        <button onclick="window.print()" class="btn btn-outline">Print</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Individual Student Report Modal -->
+  <input type="checkbox" id="individualReportModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass max-w-4xl max-h-screen overflow-y-auto relative">
+      <label for="individualReportModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <div id="individualReportContent"></div>
+      <div class="modal-action">
+        <button onclick="window.print()" class="btn btn-outline">Print</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let db = { batches: {} };
+    let currentBatch = null;
+    let currentEditDate = null;
+    let TEACHER_USERNAME = null;
+    let TEACHER_PASSWORD = null;
+    let fileHandle = null;
+
+    // Load credentials from .env file
+    async function loadCredentials() {
+      try {
+        const response = await fetch('.env?t=' + Date.now());
+        if (response.ok) {
+          const text = await response.text();
+          text.split('\n').forEach(line => {
+            line = line.trim();
+            if (line.startsWith('USERNAME=')) TEACHER_USERNAME = line.split('=')[1].trim().replace(/['"]/g, '');
+            if (line.startsWith('PASSWORD=')) TEACHER_PASSWORD = line.split('=')[1].trim().replace(/['"]/g, '');
+          });
+        }
+      } catch (e) { }
+      
+      if (!TEACHER_USERNAME || !TEACHER_PASSWORD) {
+        TEACHER_USERNAME = "teacher";
+        TEACHER_PASSWORD = "fluentx123";
+      }
+      document.getElementById('username').value = TEACHER_USERNAME;
+    }
+
+    // Save to file using File System Access API
+    async function saveToFile() {
+      try {
+        if (!fileHandle) {
+          const dirHandle = await window.showDirectoryPicker();
+          fileHandle = await dirHandle.getFileHandle('attendance_data.json', { create: true });
+        }
+        const data = JSON.stringify(db, null, 2);
+        const writable = await fileHandle.createWritable();
+        await writable.write(data);
+        await writable.close();
+      } catch (e) {
+        // Fallback download
+        const data = JSON.stringify(db, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'attendance_data.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    function manualSave() {
+      saveToFile();
+      alert("Data saved successfully!");
+    }
+
+    // Auto save every 10 seconds
+    setInterval(() => {
+      if (document.getElementById('mainApp').classList.contains('hidden')) return;
+      saveToFile();
+    }, 10000);
+
+    function loadData() {
+      const saved = localStorage.getItem('sg_attendance_data');
+      if (saved) {
+        try { db = JSON.parse(saved); } catch(e) { db = { batches: {} }; }
+      }
+      renderBatches();
+    }
+
+    function saveData() {
+      localStorage.setItem('sg_attendance_data', JSON.stringify(db));
+    }
+
+    function login() {
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value;
+      if (user === TEACHER_USERNAME && pass === TEACHER_PASSWORD) {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+        loadData();
+        if (Object.keys(db.batches).length > 0) selectBatch(Object.keys(db.batches)[0]);
+      } else {
+        alert("Wrong username or password!");
+      }
+    }
+
+    function logout() {
+      if (confirm("Logout?")) {
+        document.getElementById('mainApp').classList.add('hidden');
+        document.getElementById('loginScreen').classList.remove('hidden');
+      }
+    }
+
+    function createBatch() {
+      const name = document.getElementById('newBatchName').value.trim();
+      if (!name) return alert("Enter batch name");
+      if (db.batches[name]) return alert("Batch already exists");
+      
+      db.batches[name] = { students: [], attendance: {} };
+      saveData();
+      renderBatches();
+      selectBatch(name);
+      document.getElementById('newBatchName').value = '';
+      document.getElementById('batchModal').checked = false;
+    }
+
+    function addStudent() {
+      if (!currentBatch) return;
+      const name = document.getElementById('newStudentName').value.trim();
+      if (!name) return alert("Enter student name");
+      if (db.batches[currentBatch].students.includes(name)) return alert("Already added");
+      
+      db.batches[currentBatch].students.push(name);
+      saveData();
+      renderAttendanceTable();
+      document.getElementById('newStudentName').value = '';
+      document.getElementById('studentModal').checked = false;
+    }
+
+    function renderBatches() {
+      const container = document.getElementById('batchTabs');
+      container.innerHTML = '';
+      const batches = Object.keys(db.batches).sort();
+      if (batches.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 py-8">No batches yet. Click "New Batch" to create one!</p>';
+        return;
+      }
+      batches.forEach(name => {
+        const tab = document.createElement('a');
+        tab.className = `tab tab-lifted ${currentBatch === name ? 'tab-active' : ''}`;
+        tab.textContent = name;
+        tab.onclick = () => selectBatch(name);
+        container.appendChild(tab);
+      });
+    }
+
+    function selectBatch(name) {
+      currentBatch = name;
+      renderBatches();
+      renderAttendanceTable();
+    }
+
+    function renderAttendanceTable() {
+      if (!currentBatch) return;
+      const batch = db.batches[currentBatch];
+      const today = new Date().toISOString().split('T')[0];
+      if (!batch.attendance[today]) batch.attendance[today] = {};
+
+      const html = `
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-3xl font-bold">${currentBatch}</h2>
+          <button onclick="document.getElementById('studentModal').checked=true; document.getElementById('modalBatchName').textContent=currentBatch" class="btn btn-outline">Add Student</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table table-zebra">
+            <thead><tr><th>#</th><th>Name</th><th>Status</th></tr></thead>
+            <tbody>
+              ${batch.students.map((s, i) => {
+                const st = batch.attendance[today][s] || 'absent';
+                return `<tr><td>${i+1}</td><td>${s}</td>
+                  <td><div class="btn-group">
+                    <button class="btn btn-xs ${st==='present'?'btn-success':''}" onclick="markStatus('${s}','present')">Present</button>
+                    <button class="btn btn-xs ${st==='absent'?'btn-error':''}" onclick="markStatus('${s}','absent')">Absent</button>
+                    <button class="btn btn-xs ${st==='late'?'btn-warning':''}" onclick="markStatus('${s}','late')">Late</button>
+                    <button class="btn btn-xs ${st==='early'?'btn-secondary':''}" onclick="markStatus('${s}','early')">Early</button>
+                  </div></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+      document.getElementById('attendanceSection').innerHTML = html;
+    }
+
+    function markStatus(student, status) {
+      const today = new Date().toISOString().split('T')[0];
+      db.batches[currentBatch].attendance[today] = db.batches[currentBatch].attendance[today] || {};
+      db.batches[currentBatch].attendance[today][student] = status;
+      saveData();
+      renderAttendanceTable();
+    }
+
+    function changePassword() {
+      const oldp = document.getElementById('oldPassword').value;
+      const newp = document.getElementById('newPassword').value;
+      const conf = document.getElementById('confirmPassword').value;
+      
+      if (oldp !== TEACHER_PASSWORD) return alert("Wrong current password");
+      if (newp !== conf) return alert("Passwords don't match");
+      if (newp.length < 6) return alert("Password too short");
+      
+      TEACHER_PASSWORD = newp;
+      
+      const env = `USERNAME=${TEACHER_USERNAME}\nPASSWORD=${newp}`;
+      const blob = new Blob([env], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '.env';
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      alert("New .env file downloaded! Replace the old one.");
+      document.getElementById('changePasswordModal').checked = false;
+    }
+
+    function openFillPastModal() {
+      document.getElementById('pastDatePicker').value = new Date().toISOString().split('T')[0];
+      document.getElementById('pastAttendanceModal').checked = true;
+      document.getElementById('pastAttendanceTable').innerHTML = '<p class="text-center py-8 text-gray-500">Select a date and click Load</p>';
+    }
+
+    function loadPastAttendance() {
+      const date = document.getElementById('pastDatePicker').value;
+      if (!date || !currentBatch) return alert("Select batch and date");
+      currentEditDate = date;
+      const batch = db.batches[currentBatch];
+      const record = batch.attendance[date] || {};
+      
+      const html = `<h4 class="font-bold text-lg mb-4">Editing: ${new Date(date).toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</h4>
+        <table class="table table-zebra"><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody>
+          ${batch.students.map(s => {
+            const st = record[s] || 'absent';
+            return `<tr><td class="font-medium">${s}</td><td><div class="btn-group">
+              <button class="btn btn-xs ${st==='present'?'btn-success':''}" onclick="setPastStatus('${s}','present')">Present</button>
+              <button class="btn btn-xs ${st==='absent'?'btn-error':''}" onclick="setPastStatus('${s}','absent')">Absent</button>
+              <button class="btn btn-xs ${st==='late'?'btn-warning':''}" onclick="setPastStatus('${s}','late')">Late</button>
+              <button class="btn btn-xs ${st==='early'?'btn-secondary':''}" onclick="setPastStatus('${s}','early')">Early</button>
+            </div></td></tr>`;
+          }).join('')}
+        </tbody></table>`;
+      document.getElementById('pastAttendanceTable').innerHTML = html;
+    }
+
+    window.setPastStatus = function(student, status) {
+      db.batches[currentBatch].attendance[currentEditDate] = db.batches[currentBatch].attendance[currentEditDate] || {};
+      db.batches[currentBatch].attendance[currentEditDate][student] = status;
+      loadPastAttendance();
+    };
+
+    function savePastAttendance() {
+      saveData();
+      alert("Saved for " + currentEditDate);
+    }
+
+    function openReportsModal() {
+      document.getElementById('reportsModal').checked = true;
+      populateReportSelects();
+      showReportTab('batch');
+    }
+
+    function showReportTab(tab) {
+      ['batchReport', 'studentReport', 'rangeReport'].forEach(id => document.getElementById(id).classList.add('hidden'));
+      document.getElementById(tab + 'Report').classList.remove('hidden');
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('tab-active'));
+      event.target.classList.add('tab-active');
+      if (tab === 'batch') generateBatchReport();
+      if (tab === 'student') loadStudentsForReport();
+    }
+
+    function populateReportSelects() {
+      ['reportBatchSelect', 'studentBatchSelect', 'rangeBatchSelect'].forEach(id => {
+        const select = document.getElementById(id);
+        select.innerHTML = '<option value="">Select Batch</option>';
+        Object.keys(db.batches).forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name; opt.textContent = name;
+          select.appendChild(opt);
+        });
+      });
+    }
+
+    function loadStudentsForReport() {
+      const batchName = document.getElementById('studentBatchSelect').value;
+      const select = document.getElementById('studentSelect');
+      select.innerHTML = '<option value="">Select Student</option>';
+      if (batchName) {
+        db.batches[batchName].students.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s; opt.textContent = s;
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    function generateBatchReport() {
+      const batchName = document.getElementById('reportBatchSelect').value;
+      if (!batchName) return;
+      const batch = db.batches[batchName];
+      const dates = Object.keys(batch.attendance).sort();
+      if (dates.length === 0) {
+        document.getElementById('batchReportOutput').innerHTML = '<div class="alert alert-info">No attendance recorded</div>';
+        return;
+      }
+      let html = `<h3 class="text-2xl font-bold mb-6">${batchName} Summary</h3><table class="table table-zebra"><thead><tr><th>Student</th><th>Present</th><th>Late</th><th>Early</th><th>Absent</th><th>%</th></tr></thead><tbody>`;
+      batch.students.forEach(s => {
+        let p=0,l=0,e=0,a=0;
+        dates.forEach(d => {
+          const st = batch.attendance[d][s] || 'absent';
+          if(st==='present')p++; else if(st==='late')l++; else if(st==='early')e++; else a++;
+        });
+        const total = p+l+e+a;
+        const perc = total ? Math.round((p + l*0.8 + e*0.9)/total * 100) : 0;
+        html += `<tr>
+          <td><span class="student-link" onclick="showIndividualReport('${batchName}','${s}')">${s}</span></td>
+          <td class="text-success font-bold">${p}</td><td class="text-warning">${l}</td><td class="text-secondary">${e}</td><td class="text-error">${a}</td>
+          <td><span class="badge ${perc>=90?'badge-success':perc>=75?'badge-warning':'badge-error'}">${perc}%</span></td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      document.getElementById('batchReportOutput').innerHTML = html;
+    }
+
+    function generateStudentReport() {
+      const batchName = document.getElementById('studentBatchSelect').value;
+      const student = document.getElementById('studentSelect').value;
+      if (!batchName || !student) return alert("Select batch and student");
+      showIndividualReport(batchName, student);
+    }
+
+    function generateDateRangeReport() {
+      const start = document.getElementById('rangeStart').value;
+      const end = document.getElementById('rangeEnd').value;
+      const batchName = document.getElementById('rangeBatchSelect').value;
+      if (!start || !end || !batchName) return alert("Fill all fields");
+      const batch = db.batches[batchName];
+      const dates = Object.keys(batch.attendance).filter(d => d >= start && d <= end).sort();
+      let html = `<h3 class="text-2xl font-bold mb-4">${batchName} (${start} to ${end})</h3><table class="table table-zebra text-sm"><thead><tr><th>Date</th>${batch.students.map(s => `<th><span class="student-link" onclick="showIndividualReport('${batchName}','${s}')">${s.split(' ')[0]}</span></th>`).join('')}</tr></thead><tbody>`;
+      dates.forEach(d => {
+        html += `<tr><td>${new Date(d).toLocaleDateString('en-IN')}</td>`;
+        batch.students.forEach(s => {
+          const st = batch.attendance[d][s] || 'absent';
+          const icon = st==='present'?'P':st==='late'?'L':st==='early'?'E':'A';
+          const color = st==='present'?'text-success':st==='late'?'text-warning':st==='early'?'text-secondary':'text-error';
+          html += `<td class="${color} text-center font-bold">${icon}</td>`;
+        });
+        html += `</tr>`;
+      });
+      html += `</tbody></table>`;
+      document.getElementById('dateRangeReportOutput').innerHTML = html;
+    }
+
+    function showIndividualReport(batchName, studentName) {
+      const batch = db.batches[batchName];
+      const dates = Object.keys(batch.attendance).sort().reverse();
+      let p=0,l=0,e=0,a=0;
+      let table = `<h3 class="text-3xl font-bold mb-4">${studentName}'s Report - ${batchName}</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">`;
+      dates.forEach(d => {
+        const st = batch.attendance[d][studentName] || 'absent';
+        if(st==='present')p++; else if(st==='late')l++; else if(st==='early')e++; else a++;
+      });
+      table += `<div class="stat glass"><div class="stat-title">Present</div><div class="stat-value text-success">${p}</div></div>
+      <div class="stat glass"><div class="stat-title">Late</div><div class="stat-value text-warning">${l}</div></div>
+      <div class="stat glass"><div class="stat-title">Early Leave</div><div class="stat-value text-secondary">${e}</div></div>
+      <div class="stat glass"><div class="stat-title">Absent</div><div class="stat-value text-error">${a}</div></div></div>
+      <table class="table table-zebra"><thead><tr><th>Date</th><th>Day</th><th>Status</th></tr></thead><tbody>`;
+      dates.forEach(d => {
+        const st = batch.attendance[d][studentName] || 'absent';
+        const display = st==='present'?'Present':st==='late'?'Late':st==='early'?'Early Leave':'Absent';
+        const color = st==='present'?'badge-success':st==='late'?'badge-warning':st==='early'?'badge-secondary':'badge-error';
+        table += `<tr><td>${new Date(d).toLocaleDateString()}</td><td>${new Date(d).toLocaleString('en-US',{weekday:'long'})}</td><td><span class="badge ${color}">${display}</span></td></tr>`;
+      });
+      table += `</tbody></table>`;
+      document.getElementById('individualReportContent').innerHTML = table;
+      document.getElementById('individualReportModal').checked = true;
+    }
+
+    function exportAllToCSV() {
+      let csv = "Batch,Date,Student,Status\n";
+      Object.keys(db.batches).forEach(bn => {
+        const b = db.batches[bn];
+        Object.keys(b.attendance).forEach(d => {
+          b.students.forEach(s => {
+            const st = b.attendance[d][s] || 'absent';
+            const text = st === 'present' ? 'Present' : st === 'late' ? 'Late' : st === 'early' ? 'Early Leave' : 'Absent';
+            csv += `${bn},${d},${s},${text}\n`;
+          });
+        });
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = "SGFluentX_All_Attendance.csv"; a.click();
+    }
+
+    document.getElementById('addBatchBtn').onclick = () => document.getElementById('batchModal').checked = true;
+
+    window.onload = async () => {
+      await loadCredentials();
+      loadData();
+    };
+  </script>
+</body>
+</html>
