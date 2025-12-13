@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SG FluentX | Attendance System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"/>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    h1,h2,h3,h4 { font-family: 'Poppins', sans-serif; }
+    .glass { backdrop-filter: blur(16px); background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.3); }
+    .dark .glass { background: rgba(15,23,42,0.95); }
+    .student-link { cursor: pointer; color: #6366f1; font-weight: 600; text-decoration: underline; }
+    .student-link:hover { color: #4f46e5; }
+    .auto-save { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+    @media print { .no-print { display: none !important; } }
+    /* Toast Notification Styles */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toast {
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 350px;
+      animation: slideInLeft 0.3s ease, fadeOut 0.5s ease 2.5s forwards;
+      font-weight: 500;
+    }
+    .toast-success { background: #10b981; color: white; border-left: 5px solid #059669; }
+    .toast-info { background: #3b82f6; color: white; border-left: 5px solid #1d4ed8; }
+    .toast-warning { background: #f59e0b; color: white; border-left: 5px solid #d97706; }
+    .toast-error { background: #ef4444; color: white; border-left: 5px solid #dc2626; }
+    @keyframes slideInLeft {
+      from { transform: translateX(-100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadeOut {
+      to { opacity: 0; transform: translateX(-100%); }
+    }
+    /* Status cycling button animation */
+    .status-btn { transition: all 0.2s ease; }
+    .status-btn:hover { transform: scale(1.05); }
+    .status-btn:active { transform: scale(0.95); }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-slate-900 dark:via-purple-950 dark:to-pink-950">
+
+  <!-- Login Screen -->
+  <div id="loginScreen" class="flex items-center justify-center min-h-screen px-4">
+    <div class="glass rounded-3xl shadow-2xl p-10 max-w-md w-full text-center">
+      <i class="fas fa-graduation-cap text-6xl text-indigo-600 mb-4"></i>
+      <h1 class="text-3xl font-bold gradient-text bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+        SG FluentX Attendance
+      </h1>
+      <p class="text-sm text-gray-600 mb-6">Teacher Login Required</p>
+      <input type="text" id="username" class="input input-bordered w-full mb-4" placeholder="Username" />
+      <input type="password" id="password" class="input input-bordered w-full mb-6" placeholder="Password"/>
+      <button onclick="login()" class="btn btn-primary w-full">Login as Teacher</button>
+      <p class="text-xs text-gray-500 mt-6">
+        Default: <code>teacher</code> / <code>fluentx123</code><br>
+        <strong class="text-green-600">Real-time sync • Full Edit/Delete • Mobile Friendly</strong>
+      </p>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="mainApp" class="hidden relative">
+    <!-- Toast Notifications Container -->
+    <div class="toast-container no-print"></div>
+
+    <!-- Sync Indicator -->
+    <div id="syncIndicator" class="auto-save no-print">
+      <div class="alert alert-success shadow-lg w-auto flex items-center gap-2">
+        <i class="fas fa-cloud"></i>
+        <span>Sync Active (Queue: <span id="queueCount">0</span>)</span>
+        <button onclick="manualSync()" class="btn btn-xs btn-ghost">Sync Now</button>
+      </div>
+    </div>
+
+    <div class="navbar glass shadow-lg fixed top-0 z-50 no-print">
+      <div class="flex-1 px-4">
+        <h1 class="text-xl font-bold gradient-text bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+          SG FluentX - Attendance
+        </h1>
+      </div>
+      <div class="flex-none gap-2">
+        <a href="index.html" class="btn btn-info btn-sm">Student Lessons</a>
+        <button onclick="openReportsModal()" class="btn btn-success">Reports</button>
+        <!-- Changed: Calendar icon for Past button -->
+        <button onclick="openFillPastModal()" class="btn btn-info btn-sm"><i class="fas fa-calendar-days"></i> Fill Past</button>
+        <button onclick="openChangePasswordModal()" class="btn btn-warning btn-sm">Change Password</button>
+        <button onclick="logout()" class="btn btn-ghost btn-sm">Logout</button>
+      </div>
+    </div>
+
+    <div class="pt-20 p-4 max-w-7xl mx-auto">
+      <div class="flex justify-between items-center mb-6">
+        <button id="addBatchBtn" class="btn btn-primary text-lg">New Batch</button>
+        <button onclick="exportAllToCSV()" class="btn btn-success text-lg">Export CSV</button>
+      </div>
+
+      <div id="batchTabs" class="tabs tabs-boxed glass mb-6 flex flex-wrap gap-2 justify-center"></div>
+      <div id="attendanceSection" class="glass rounded-3xl shadow-2xl p-8 min-h-screen">
+        <div class="text-center py-20">
+          <i class="fas fa-users text-6xl text-gray-300 mb-4"></i>
+          <p class="text-lg">Select a batch to manage attendance</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <input type="checkbox" id="batchModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="batchModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-lg mb-4">Create New Batch</h3>
+      <input type="text" id="newBatchName" placeholder="e.g. Morning 7AM Batch" class="input input-bordered w-full" />
+      <div class="modal-action">
+        <button onclick="createBatch()" class="btn btn-primary">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="checkbox" id="editBatchModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="editBatchModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-lg mb-4">Edit Batch Name</h3>
+      <input type="text" id="editBatchNameInput" class="input input-bordered w-full mb-4" />
+      <div class="modal-action">
+        <button onclick="saveEditedBatch()" class="btn btn-primary">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="checkbox" id="studentModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="studentModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-lg mb-4">Add Student to <span id="modalBatchName"></span></h3>
+      <input type="text" id="newStudentName" placeholder="Student Name" class="input input-bordered w-full" />
+      <div class="modal-action mt-4">
+        <button onclick="addStudent()" class="btn btn-primary">Add Student</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="checkbox" id="editStudentModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="editStudentModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-lg mb-4">Edit Student Name</h3>
+      <input type="text" id="editStudentNewName" class="input input-bordered w-full" placeholder="New Name" />
+      <div class="modal-action mt-4">
+        <button onclick="saveEditedStudent()" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="checkbox" id="pastAttendanceModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass max-w-4xl relative">
+      <label for="pastAttendanceModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-xl mb-4">Fill Past Attendance</h3>
+      <div class="flex gap-4 items-end mb-6">
+        <input type="date" id="pastDatePicker" class="input input-bordered flex-1" />
+        <button onclick="loadPastAttendance()" class="btn btn-primary">Load & Edit</button>
+      </div>
+      <div id="pastAttendanceTable" class="mb-6"></div>
+      <div class="modal-action">
+        <button onclick="savePastAttendance()" class="btn btn-success">Save This Date</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="checkbox" id="changePasswordModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="changePasswordModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-lg mb-4">Change Teacher Password</h3>
+      <input type="password" id="oldPassword" placeholder="Current Password" class="input input-bordered w-full mb-3"/>
+      <input type="password" id="newPassword" placeholder="New Password" class="input input-bordered w-full mb-3"/>
+      <input type="password" id="confirmPassword" placeholder="Confirm New Password" class="input input-bordered w-full mb-4"/>
+      <div class="modal-action">
+        <button onclick="changePassword()" class="btn btn-primary w-full">Update Password</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reports Modal -->
+  <input type="checkbox" id="reportsModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass max-w-6xl max-h-screen overflow-y-auto relative">
+      <label for="reportsModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-2xl mb-6 text-center">Attendance Reports</h3>
+      <div class="tabs tabs-boxed mb-6">
+        <a class="tab tab-active" onclick="showReportTab('batch')">Batch Summary</a>
+        <a class="tab" onclick="showReportTab('student')">Student Report</a>
+        <a class="tab" onclick="showReportTab('range')">Date Range</a>
+      </div>
+      <div id="reportContent">
+        <div id="batchReport" class="space-y-6">
+          <select id="reportBatchSelect" class="select select-bordered w-full max-w-xs" onchange="generateBatchReport()"></select>
+          <div id="batchReportOutput" class="mt-6"></div>
+        </div>
+        <div id="studentReport" class="hidden space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <select id="studentBatchSelect" class="select select-bordered" onchange="loadStudentsForReport()"></select>
+            <select id="studentSelect" class="select select-bordered"></select>
+          </div>
+          <button onclick="generateStudentReport()" class="btn btn-primary">Generate</button>
+          <div id="studentReportOutput" class="mt-6"></div>
+        </div>
+        <div id="rangeReport" class="hidden space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input type="date" id="rangeStart" class="input input-bordered" />
+            <input type="date" id="rangeEnd" class="input input-bordered" />
+            <select id="rangeBatchSelect" class="select select-bordered"></select>
+          </div>
+          <button onclick="generateDateRangeReport()" class="btn btn-primary">Generate</button>
+          <div id="dateRangeReportOutput" class="mt-6"></div>
+        </div>
+      </div>
+      <div class="modal-action mt-6">
+        <button onclick="window.print()" class="btn btn-outline">Print / Save PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Individual Student Report Modal -->
+  <input type="checkbox" id="individualReportModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass max-w-4xl max-h-screen overflow-y-auto relative">
+      <label for="individualReportModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <div id="individualReportContent"></div>
+      <div class="modal-action">
+        <button onclick="window.print()" class="btn btn-outline">Print / Save PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // === REPLACE WITH YOUR ACTUAL WEB APP URL ===
+    const API_URL = "https://script.google.com/macros/s/AKfycby_mj2mS1kZDTUqaD6t3OWYYS7D6Z-lmdF7FBCNEzmmZEOsd2_nK38MhtmwhfTg4LG1jg/exec";
+
+    // Core Data & State
+    let db = { batches: {} };
+    let currentBatch = null;
+    let currentEditDate = null;
+    let TEACHER_USERNAME = "teacher";
+    let TEACHER_PASSWORD = "fluentx123";
+    let tempEditBatchOldName = null;
+    let tempEditStudentOldName = null;
+
+    // ============================
+    // 1. BACKGROUND SYNC QUEUE SYSTEM
+    // ============================
+    const syncQueue = [];
+    const MAX_RETRIES = 3;
+    let isSyncing = false;
+    let online = navigator.onLine;
+
+    // Load initial data from localStorage
+    function loadLocalData() {
+      const saved = localStorage.getItem('sgFluentXAttendance');
+      if (saved) {
+        try {
+          db = JSON.parse(saved);
+          showToast('Local data loaded', 'info');
+        } catch (e) {
+          console.error("Failed to parse localStorage data", e);
+        }
+      }
+    }
+
+    // Save data to localStorage
+    function saveLocalData() {
+      localStorage.setItem('sgFluentXAttendance', JSON.stringify(db));
+    }
+
+    // Queue a sync operation
+    function queueSync(action, params = {}, postData = null, retryCount = 0) {
+      syncQueue.push({ action, params, postData, retryCount });
+      updateSyncIndicator();
+      processSyncQueue();
+    }
+
+    // Process the sync queue
+    async function processSyncQueue() {
+      if (isSyncing || syncQueue.length === 0 || !online) return;
+      
+      isSyncing = true;
+      const item = syncQueue.shift();
+      
+      try {
+        await fetchAPI(item.action, item.params, item.postData);
+        showToast('Synced to Google Sheets', 'success');
+      } catch (error) {
+        console.error('Sync failed:', error);
+        
+        // Retry logic
+        if (item.retryCount < MAX_RETRIES) {
+          item.retryCount++;
+          syncQueue.unshift(item); // Put back at front
+          showToast(`Sync failed, retrying... (${item.retryCount}/${MAX_RETRIES})`, 'warning');
+          setTimeout(processSyncQueue, 5000); // Retry after 5 seconds
+        } else {
+          showToast('Sync failed after multiple attempts. Data saved locally.', 'error');
+        }
+      } finally {
+        isSyncing = false;
+        updateSyncIndicator();
+        if (syncQueue.length > 0) {
+          setTimeout(processSyncQueue, 1000); // Process next item
+        }
+      }
+    }
+
+    // Update sync indicator
+    function updateSyncIndicator() {
+      const queueCountEl = document.getElementById('queueCount');
+      const indicatorEl = document.getElementById('syncIndicator');
+      
+      if (queueCountEl) queueCountEl.textContent = syncQueue.length;
+      
+      if (indicatorEl) {
+        const alertEl = indicatorEl.querySelector('.alert');
+        if (!online) {
+          alertEl.className = 'alert alert-error shadow-lg w-auto flex items-center gap-2';
+          alertEl.innerHTML = '<i class="fas fa-cloud-slash"></i><span>Offline (Queue: ' + syncQueue.length + ')</span>';
+        } else if (syncQueue.length > 0) {
+          alertEl.className = 'alert alert-warning shadow-lg w-auto flex items-center gap-2';
+          alertEl.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i><span>Syncing (Queue: ' + syncQueue.length + ')</span>';
+        } else {
+          alertEl.className = 'alert alert-success shadow-lg w-auto flex items-center gap-2';
+          alertEl.innerHTML = '<i class="fas fa-cloud"></i><span>All changes synced</span>';
+        }
+      }
+    }
+
+    // Network status monitoring
+    window.addEventListener('online', () => {
+      online = true;
+      showToast('Back online, resuming sync...', 'info');
+      updateSyncIndicator();
+      processSyncQueue();
+    });
+
+    window.addEventListener('offline', () => {
+      online = false;
+      showToast('Offline - changes saved locally', 'warning');
+      updateSyncIndicator();
+    });
+
+    // ============================
+    // 2. TOAST NOTIFICATION SYSTEM
+    // ============================
+    function showToast(message, type = 'info') {
+      const container = document.querySelector('.toast-container');
+      if (!container) return;
+      
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      
+      // Icons for different toast types
+      const icons = {
+        success: 'fa-check-circle',
+        info: 'fa-info-circle',
+        warning: 'fa-exclamation-triangle',
+        error: 'fa-times-circle'
+      };
+      
+      toast.innerHTML = `
+        <i class="fas ${icons[type] || icons.info}"></i>
+        <span>${message}</span>
+      `;
+      
+      container.appendChild(toast);
+      
+      // Auto-remove after animation
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+      }, 3000);
+    }
+
+    // ============================
+    // 3. MODIFIED API FUNCTION WITH LOCAL FIRST
+    // ============================
+    async function fetchAPI(action, params = {}, postData = null) {
+      const url = new URL(API_URL);
+      url.searchParams.append('action', action);
+      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+
+      const options = {
+        method: postData ? 'POST' : 'GET',
+        redirect: 'follow',
+        headers: postData ? { 'Content-Type': 'text/plain' } : {}
+      };
+      if (postData) options.body = JSON.stringify(postData);
+
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      return await res.json();
+    }
+
+    // ============================
+    // 4. MODIFIED CORE FUNCTIONS
+    // ============================
+    async function loadData(silent = false) {
+      try {
+        // First try to get fresh data from server
+        const result = await fetchAPI('getAll');
+        if (result.error) throw new Error(result.error);
+        
+        // Merge server data with local changes
+        db.batches = result.batches || {};
+        saveLocalData();
+        
+        renderBatches();
+        populateReportSelects();
+        if (currentBatch) renderAttendanceTable();
+        
+        if (!silent) showToast('Data refreshed from server', 'success');
+      } catch (e) {
+        // Fallback to local data
+        loadLocalData();
+        if (!silent) showToast('Using local data (server unavailable)', 'warning');
+      }
+    }
+
+    async function manualSync() {
+      await loadData();
+    }
+
+    // ============================
+    // 5. MODIFIED ATTENDANCE MARKING
+    // ============================
+    async function markStatus(student, status) {
+      const today = new Date().toISOString().split('T')[0];
+      const attendanceObj = db.batches[currentBatch].attendance[today] || {};
+      attendanceObj[student] = status;
+      
+      // Ensure attendance object exists
+      if (!db.batches[currentBatch].attendance[today]) {
+        db.batches[currentBatch].attendance[today] = {};
+      }
+      db.batches[currentBatch].attendance[today][student] = status;
+      
+      // 1. Update UI instantly
+      renderAttendanceTable();
+      
+      // 2. Save to localStorage
+      saveLocalData();
+      
+      // 3. Queue for background sync
+      queueSync('markAttendance', {}, {
+        batch: currentBatch,
+        date: today,
+        attendance: attendanceObj
+      });
+      
+      showToast(`${student}: ${status}`, 'success');
+    }
+
+    // ============================
+    // 6. NEW: CYCLE STATUS FUNCTION
+    // ============================
+    function cycleStatus(student) {
+      const today = new Date().toISOString().split('T')[0];
+      const currentStatus = (db.batches[currentBatch].attendance[today] || {})[student] || 'absent';
+      
+      // Define the cycle order
+      const statusCycle = {
+        'absent': 'present',
+        'present': 'late',
+        'late': 'early',
+        'early': 'absent'
+      };
+      
+      const nextStatus = statusCycle[currentStatus];
+      markStatus(student, nextStatus);
+    }
+
+    // ============================
+    // 7. MODIFIED RENDER ATTENDANCE TABLE
+    // ============================
+    async function renderAttendanceTable() {
+      if (!currentBatch) return;
+      const batch = db.batches[currentBatch];
+      const today = new Date().toISOString().split('T')[0];
+
+      const html = `
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-3xl font-bold">${currentBatch}</h2>
+          <div class="flex gap-2">
+            <button onclick="document.getElementById('studentModal').checked=true; document.getElementById('modalBatchName').textContent=currentBatch" class="btn btn-outline btn-sm">Add Student</button>
+            <button onclick="deleteCurrentBatch()" class="btn btn-error btn-sm">Delete Batch</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table table-zebra">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Student Name</th>
+                <th>Actions</th>
+                <th>Status (Today - Click to Cycle)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${batch.students.map((s, i) => {
+                const st = (batch.attendance[today] || {})[s] || 'absent';
+                
+                // Determine button style based on status
+                const statusConfig = {
+                  'present': { class: 'btn-success', icon: 'fa-check', label: 'Present' },
+                  'late': { class: 'btn-warning', icon: 'fa-clock', label: 'Late' },
+                  'early': { class: 'btn-secondary', icon: 'fa-arrow-right-from-bracket', label: 'Early Leave' },
+                  'absent': { class: 'btn-error', icon: 'fa-times', label: 'Absent' }
+                };
+                
+                const config = statusConfig[st] || statusConfig.absent;
+                
+                return `
+                <tr>
+                  <td>${i+1}</td>
+                  <td class="font-medium">${s}</td>
+                  <td class="flex gap-1">
+                    <button class="btn btn-xs btn-ghost" onclick="openEditStudentModal('${s}')"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-xs btn-ghost text-error" onclick="deleteStudent('${s}')"><i class="fas fa-trash"></i></button>
+                  </td>
+                  <td>
+                    <button class="btn status-btn ${config.class} w-32" onclick="cycleStatus('${s}')">
+                      <i class="fas ${config.icon} mr-2"></i>
+                      ${config.label}
+                    </button>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p class="text-sm text-blue-700 dark:text-blue-300">
+            <i class="fas fa-info-circle mr-2"></i>
+            <strong>Tip:</strong> Click on any student's status button to cycle through: Present → Late → Early Leave → Absent
+          </p>
+        </div>`;
+        
+      document.getElementById('attendanceSection').innerHTML = html;
+    }
+
+    // ============================
+    // 8. MODIFIED BATCH/STUDENT OPERATIONS
+    // ============================
+    async function createBatch() {
+      const name = document.getElementById('newBatchName').value.trim();
+      if (!name) return showToast("Enter batch name", "error");
+      if (db.batches[name]) return showToast("Batch already exists", "error");
+
+      // Update local data
+      db.batches[name] = { students: [], attendance: {} };
+      saveLocalData();
+      
+      // Queue sync
+      queueSync('createBatch', { batch: name });
+      
+      // Update UI
+      await loadData(true);
+      selectBatch(name);
+      document.getElementById('newBatchName').value = '';
+      document.getElementById('batchModal').checked = false;
+      showToast(`Batch "${name}" created`, 'success');
+    }
+
+    async function addStudent() {
+      if (!currentBatch) return;
+      const name = document.getElementById('newStudentName').value.trim();
+      if (!name) return showToast("Enter student name", "error");
+
+      // Update local data
+      db.batches[currentBatch].students.push(name);
+      saveLocalData();
+      
+      // Queue sync
+      queueSync('addStudent', {}, { batch: currentBatch, student: name });
+      
+      // Update UI
+      renderAttendanceTable();
+      document.getElementById('newStudentName').value = '';
+      document.getElementById('studentModal').checked = false;
+      showToast(`${name} added to ${currentBatch}`, 'success');
+    }
+
+    // ============================
+    // 9. LOGIN & LOGOUT FUNCTIONS
+    // ============================
+    function login() {
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value;
+      if (user === TEACHER_USERNAME && pass === TEACHER_PASSWORD) {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+        loadLocalData(); // Load from localStorage first
+        loadData(true); // Then try to sync with server
+        showToast('Login successful', 'success');
+      } else {
+        showToast("Wrong username or password!", "error");
+      }
+    }
+
+    function logout() {
+      if (confirm("Logout?")) {
+        document.getElementById('mainApp').classList.add('hidden');
+        document.getElementById('loginScreen').classList.remove('hidden');
+        showToast('Logged out', 'info');
+      }
+    }
+
+    async function deleteCurrentBatch() {
+      if (!currentBatch) return;
+      if (!confirm(`Delete batch "${currentBatch}" and ALL its data permanently?`)) return;
+
+      // Remove from local data
+      delete db.batches[currentBatch];
+      saveLocalData();
+      
+      // Queue sync
+      queueSync('deleteBatch', { batch: currentBatch });
+      
+      // Update UI
+      await loadData(true);
+      currentBatch = null;
+      document.getElementById('attendanceSection').innerHTML = `
+        <div class="text-center py-20">
+          <i class="fas fa-users text-6xl text-gray-300 mb-4"></i>
+          <p class="text-lg">Select a batch to manage attendance</p>
+        </div>`;
+      showToast(`Batch deleted`, 'success');
+    }
+
+    async function deleteStudent(studentName) {
+      if (!confirm(`Remove "${studentName}" from this batch?`)) return;
+
+      // Remove from local data
+      const index = db.batches[currentBatch].students.indexOf(studentName);
+      if (index > -1) {
+        db.batches[currentBatch].students.splice(index, 1);
+        saveLocalData();
+      }
+      
+      // Queue sync
+      queueSync('deleteStudent', {}, { batch: currentBatch, student: studentName });
+      
+      // Update UI
+      renderAttendanceTable();
+      showToast(`${studentName} removed`, 'success');
+    }
+
+    function changePassword() {
+      const oldp = document.getElementById('oldPassword').value;
+      const newp = document.getElementById('newPassword').value;
+      const conf = document.getElementById('confirmPassword').value;
+
+      if (oldp !== TEACHER_PASSWORD) return showToast("Wrong current password", "error");
+      if (newp !== conf) return showToast("Passwords don't match", "error");
+      if (newp.length < 6) return showToast("Password too short (min 6 chars)", "error");
+
+      TEACHER_PASSWORD = newp;
+      document.getElementById('changePasswordModal').checked = false;
+      showToast("Password updated successfully!", "success");
+    }
+
+    // ============================
+    // 10. ORIGINAL FUNCTIONS (UPDATED WITH TOAST)
+    // ============================
+    function openEditBatchModal(oldName) {
+      tempEditBatchOldName = oldName;
+      document.getElementById('editBatchNameInput').value = oldName;
+      document.getElementById('editBatchModal').checked = true;
+    }
+
+    async function saveEditedBatch() {
+      const newName = document.getElementById('editBatchNameInput').value.trim();
+      if (!newName || newName === tempEditBatchOldName) {
+        document.getElementById('editBatchModal').checked = false;
+        return;
+      }
+      if (db.batches[newName]) return showToast("Batch name already exists", "error");
+
+      // Update local data
+      db.batches[newName] = db.batches[tempEditBatchOldName];
+      delete db.batches[tempEditBatchOldName];
+      saveLocalData();
+      
+      // Queue sync
+      queueSync('renameBatch', {}, { oldName: tempEditBatchOldName, newName: newName });
+      
+      // Update UI
+      await loadData();
+      if (currentBatch === tempEditBatchOldName) currentBatch = newName;
+      document.getElementById('editBatchModal').checked = false;
+      showToast(`Batch renamed to "${newName}"`, 'success');
+    }
+
+    function openEditStudentModal(oldName) {
+      tempEditStudentOldName = oldName;
+      document.getElementById('editStudentNewName').value = oldName;
+      document.getElementById('editStudentModal').checked = true;
+    }
+
+    async function saveEditedStudent() {
+      const newName = document.getElementById('editStudentNewName').value.trim();
+      if (!newName || newName === tempEditStudentOldName) {
+        document.getElementById('editStudentModal').checked = false;
+        return;
+      }
+
+      // Update local data
+      const batch = db.batches[currentBatch];
+      const index = batch.students.indexOf(tempEditStudentOldName);
+      if (index > -1) {
+        batch.students[index] = newName;
+        
+        // Update attendance records
+        Object.keys(batch.attendance).forEach(date => {
+          if (batch.attendance[date][tempEditStudentOldName] !== undefined) {
+            batch.attendance[date][newName] = batch.attendance[date][tempEditStudentOldName];
+            delete batch.attendance[date][tempEditStudentOldName];
+          }
+        });
+        
+        saveLocalData();
+      }
+      
+      // Queue sync
+      queueSync('renameStudent', {}, {
+        batch: currentBatch,
+        oldName: tempEditStudentOldName,
+        newName: newName
+      });
+      
+      // Update UI
+      await loadData();
+      renderAttendanceTable();
+      document.getElementById('editStudentModal').checked = false;
+      showToast(`Student renamed to "${newName}"`, 'success');
+    }
+
+    function renderBatches() {
+      const container = document.getElementById('batchTabs');
+      container.innerHTML = '';
+      const batches = Object.keys(db.batches).sort();
+      if (batches.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 py-8">No batches yet. Click "New Batch" to create one!</p>';
+        return;
+      }
+      batches.forEach(name => {
+        const tab = document.createElement('a');
+        tab.className = `tab tab-lifted ${currentBatch === name ? 'tab-active' : ''}`;
+        tab.innerHTML = `
+          <span>${name}</span>
+          <button class="ml-2 btn btn-xs btn-ghost" onclick="event.stopPropagation(); openEditBatchModal('${name}')">
+            <i class="fas fa-edit"></i>
+          </button>
+        `;
+        tab.onclick = (e) => {
+          if (!e.target.closest('button')) selectBatch(name);
+        };
+        container.appendChild(tab);
+      });
+    }
+
+    async function selectBatch(name) {
+      currentBatch = name;
+      renderBatches();
+      renderAttendanceTable();
+    }
+
+    function openFillPastModal() {
+      document.getElementById('pastDatePicker').value = new Date().toISOString().split('T')[0];
+      document.getElementById('pastAttendanceModal').checked = true;
+      document.getElementById('pastAttendanceTable').innerHTML = '<p class="text-center py-8 text-gray-500">Select a date and click Load</p>';
+    }
+
+    async function loadPastAttendance() {
+      const date = document.getElementById('pastDatePicker').value;
+      if (!date || !currentBatch) return showToast("Select batch and date", "error");
+      currentEditDate = date;
+
+      try {
+        const result = await fetchAPI('getAttendance', { batch: currentBatch, date });
+        const record = result.attendance || {};
+
+        // Update local data
+        db.batches[currentBatch].attendance[date] = record;
+        saveLocalData();
+      } catch (e) {
+        showToast("Could not load from server, using local data", "warning");
+      }
+
+      const batch = db.batches[currentBatch];
+      const record = batch.attendance[date] || {};
+      
+      const html = `<h4 class="font-bold text-lg mb-4">Editing: ${new Date(date).toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</h4>
+        <div class="overflow-x-auto">
+          <table class="table table-zebra">
+            <thead>
+              <tr><th>Name</th><th>Status (Click to Cycle)</th></tr>
+            </thead>
+            <tbody>
+              ${batch.students.map(s => {
+                const st = record[s] || 'absent';
+                const statusConfig = {
+                  'present': { class: 'btn-success', icon: 'fa-check', label: 'Present', next: 'late' },
+                  'late': { class: 'btn-warning', icon: 'fa-clock', label: 'Late', next: 'early' },
+                  'early': { class: 'btn-secondary', icon: 'fa-arrow-right-from-bracket', label: 'Early Leave', next: 'absent' },
+                  'absent': { class: 'btn-error', icon: 'fa-times', label: 'Absent', next: 'present' }
+                };
+                const config = statusConfig[st] || statusConfig.absent;
+                
+                return `<tr>
+                  <td class="font-medium">${s}</td>
+                  <td>
+                    <button class="btn status-btn ${config.class} w-32" onclick="setPastStatus('${s}', '${config.next}')">
+                      <i class="fas ${config.icon} mr-2"></i>
+                      ${config.label}
+                    </button>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+      document.getElementById('pastAttendanceTable').innerHTML = html;
+    }
+
+    window.setPastStatus = async function(student, nextStatus) {
+      if (!currentBatch || !currentEditDate) return;
+      
+      db.batches[currentBatch].attendance[currentEditDate] = db.batches[currentBatch].attendance[currentEditDate] || {};
+      db.batches[currentBatch].attendance[currentEditDate][student] = nextStatus;
+      saveLocalData();
+      
+      // Queue sync
+      queueSync('markAttendance', {}, {
+        batch: currentBatch,
+        date: currentEditDate,
+        attendance: db.batches[currentBatch].attendance[currentEditDate]
+      });
+      
+      // Reload the display
+      await loadPastAttendance();
+      showToast(`${student}: ${nextStatus}`, 'success');
+    };
+
+    async function savePastAttendance() {
+      if (!currentBatch || !currentEditDate) return;
+      
+      // Queue sync (already done in setPastStatus, but ensure final sync)
+      queueSync('markAttendance', {}, {
+        batch: currentBatch,
+        date: currentEditDate,
+        attendance: db.batches[currentBatch].attendance[currentEditDate]
+      });
+      
+      showToast("Saved for " + currentEditDate, 'success');
+      document.getElementById('pastAttendanceModal').checked = false;
+    }
+
+    async function openReportsModal() {
+      document.getElementById('reportsModal').checked = true;
+      await populateReportSelects();
+      showReportTab('batch');
+    }
+
+    function showReportTab(tab) {
+      ['batchReport', 'studentReport', 'rangeReport'].forEach(id => document.getElementById(id).classList.add('hidden'));
+      document.getElementById(tab + 'Report').classList.remove('hidden');
+      document.querySelectorAll('#reportsModal .tab').forEach(t => t.classList.remove('tab-active'));
+      event.target.classList.add('tab-active');
+      if (tab === 'batch') generateBatchReport();
+      if (tab === 'student') loadStudentsForReport();
+    }
+
+    async function populateReportSelects() {
+      const selects = ['reportBatchSelect', 'studentBatchSelect', 'rangeBatchSelect'];
+      for (const id of selects) {
+        const select = document.getElementById(id);
+        select.innerHTML = '<option value="">Select Batch</option>';
+        Object.keys(db.batches).sort().forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name; opt.textContent = name;
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    async function loadStudentsForReport() {
+      const batchName = document.getElementById('studentBatchSelect').value;
+      const select = document.getElementById('studentSelect');
+      select.innerHTML = '<option value="">Select Student</option>';
+      if (batchName && db.batches[batchName]) {
+        db.batches[batchName].students.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s; opt.textContent = s;
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    function generateBatchReport() {
+      const batchName = document.getElementById('reportBatchSelect').value;
+      if (!batchName) return;
+      const batch = db.batches[batchName];
+      const dates = Object.keys(batch.attendance).sort();
+      if (dates.length === 0) {
+        document.getElementById('batchReportOutput').innerHTML = '<div class="alert alert-info">No attendance recorded</div>';
+        return;
+      }
+      let html = `<h3 class="text-2xl font-bold mb-6">${batchName} Summary</h3>
+                  <div class="overflow-x-auto">
+                    <table class="table table-zebra">
+                      <thead>
+                        <tr>
+                          <th>Student</th>
+                          <th>Present</th>
+                          <th>Late</th>
+                          <th>Early</th>
+                          <th>Absent</th>
+                          <th>% Attendance</th>
+                        </tr>
+                      </thead>
+                      <tbody>`;
+      batch.students.forEach(s => {
+        let p=0,l=0,e=0,a=0;
+        dates.forEach(d => {
+          const st = batch.attendance[d][s] || 'absent';
+          if(st==='present')p++; else if(st==='late')l++; else if(st==='early')e++; else a++;
+        });
+        const total = p+l+e+a;
+        const perc = total ? Math.round((p + l*0.8 + e*0.9)/total * 100) : 0;
+        html += `<tr>
+          <td><span class="student-link" onclick="showIndividualReport('${batchName}','${s}')">${s}</span></td>
+          <td class="text-success font-bold">${p}</td>
+          <td class="text-warning">${l}</td>
+          <td class="text-secondary">${e}</td>
+          <td class="text-error">${a}</td>
+          <td><span class="badge ${perc>=90?'badge-success':perc>=75?'badge-warning':'badge-error'}">${perc}%</span></td>
+        </tr>`;
+      });
+      html += `</tbody></table></div>`;
+      document.getElementById('batchReportOutput').innerHTML = html;
+    }
+
+    function generateStudentReport() {
+      const batchName = document.getElementById('studentBatchSelect').value;
+      const student = document.getElementById('studentSelect').value;
+      if (!batchName || !student) return showToast("Select batch and student", "error");
+      showIndividualReport(batchName, student);
+    }
+
+    function generateDateRangeReport() {
+      const start = document.getElementById('rangeStart').value;
+      const end = document.getElementById('rangeEnd').value;
+      const batchName = document.getElementById('rangeBatchSelect').value;
+      if (!start || !end || !batchName) return showToast("Fill all fields", "error");
+      const batch = db.batches[batchName];
+      const dates = Object.keys(batch.attendance).filter(d => d >= start && d <= end).sort();
+      
+      if (dates.length === 0) {
+        document.getElementById('dateRangeReportOutput').innerHTML = '<div class="alert alert-info">No attendance recorded in this date range</div>';
+        return;
+      }
+      
+      let html = `<h3 class="text-2xl font-bold mb-4">${batchName} (${start} to ${end})</h3>
+                  <div class="overflow-x-auto">
+                    <table class="table table-zebra text-sm">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          ${batch.students.map(s => `<th><span class="student-link" onclick="showIndividualReport('${batchName}','${s}')">${s.split(' ')[0]}</span></th>`).join('')}
+                        </tr>
+                      </thead>
+                      <tbody>`;
+      dates.forEach(d => {
+        html += `<tr><td class="font-medium">${new Date(d).toLocaleDateString('en-IN')}</td>`;
+        batch.students.forEach(s => {
+          const st = batch.attendance[d][s] || 'absent';
+          const icon = st==='present'?'P':st==='late'?'L':st==='early'?'E':'A';
+          const color = st==='present'?'text-success':st==='late'?'text-warning':st==='early'?'text-secondary':'text-error';
+          html += `<td class="${color} text-center font-bold">${icon}</td>`;
+        });
+        html += `</tr>`;
+      });
+      html += `</tbody></table></div>`;
+      document.getElementById('dateRangeReportOutput').innerHTML = html;
+    }
+
+    function showIndividualReport(batchName, studentName) {
+      const batch = db.batches[batchName];
+      const dates = Object.keys(batch.attendance).sort().reverse();
+      let p=0,l=0,e=0,a=0;
+      dates.forEach(d => {
+        const st = batch.attendance[d][studentName] || 'absent';
+        if(st==='present')p++; else if(st==='late')l++; else if(st==='early')e++; else a++;
+      });
+      
+      const total = p+l+e+a;
+      const perc = total ? Math.round((p + l*0.8 + e*0.9)/total * 100) : 0;
+      
+      let table = `<h3 class="text-3xl font-bold mb-4">${studentName}'s Report - ${batchName}</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">`;
+      table += `<div class="stat glass"><div class="stat-title">Present</div><div class="stat-value text-success">${p}</div></div>
+      <div class="stat glass"><div class="stat-title">Late</div><div class="stat-value text-warning">${l}</div></div>
+      <div class="stat glass"><div class="stat-title">Early Leave</div><div class="stat-value text-secondary">${e}</div></div>
+      <div class="stat glass"><div class="stat-title">Absent</div><div class="stat-value text-error">${a}</div></div></div>
+      <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="font-bold">Overall Attendance: </span>
+            <span class="badge ${perc>=90?'badge-success':perc>=75?'badge-warning':'badge-error'} text-lg">${perc}%</span>
+          </div>
+          <span class="text-sm text-gray-600">Total Sessions: ${total}</span>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr><th>Date</th><th>Day</th><th>Status</th></tr>
+          </thead>
+          <tbody>`;
+      dates.forEach(d => {
+        const st = batch.attendance[d][studentName] || 'absent';
+        const display = st==='present'?'Present':st==='late'?'Late':st==='early'?'Early Leave':'Absent';
+        const color = st==='present'?'badge-success':st==='late'?'badge-warning':st==='early'?'badge-secondary':'badge-error';
+        table += `<tr>
+          <td>${new Date(d).toLocaleDateString()}</td>
+          <td>${new Date(d).toLocaleString('en-US',{weekday:'long'})}</td>
+          <td><span class="badge ${color}">${display}</span></td>
+        </tr>`;
+      });
+      table += `</tbody></table></div>`;
+      document.getElementById('individualReportContent').innerHTML = table;
+      document.getElementById('individualReportModal').checked = true;
+    }
+
+    function exportAllToCSV() {
+      let csv = "Batch,Date,Student,Status\n";
+      Object.keys(db.batches).forEach(bn => {
+        const b = db.batches[bn];
+        Object.keys(b.attendance).forEach(d => {
+          b.students.forEach(s => {
+            const st = b.attendance[d][s] || 'absent';
+            const text = st === 'present' ? 'Present' : st === 'late' ? 'Late' : st === 'early' ? 'Early Leave' : 'Absent';
+            csv += `"${bn}","${d}","${s}","${text}"\n`;
+          });
+        });
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = "SGFluentX_All_Attendance.csv"; a.click();
+      URL.revokeObjectURL(url);
+      showToast('CSV exported successfully', 'success');
+    }
+
+    // ============================
+    // 11. INITIALIZATION
+    // ============================
+    document.getElementById('addBatchBtn').onclick = () => document.getElementById('batchModal').checked = true;
+
+    // Start sync queue processing
+    setInterval(processSyncQueue, 5000);
+
+    // Initial load
+    window.onload = () => {
+      updateSyncIndicator();
+      // Auto-sync every 30 seconds when tab is visible
+      setInterval(async () => {
+        if (document.visibilityState === 'visible' && !document.getElementById('mainApp').classList.contains('hidden')) {
+          await loadData(true);
+        }
+      }, 30000);
+    };
+
+  </script>
+</body>
+</html>
