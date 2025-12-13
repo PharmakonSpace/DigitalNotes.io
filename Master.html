@@ -32,8 +32,8 @@
       <input type="password" id="password" class="input input-bordered w-full mb-6" placeholder="Password"/>
       <button onclick="login()" class="btn btn-primary w-full">Login as Teacher</button>
       <p class="text-xs text-gray-500 mt-6">
-        Default credentials: <code>teacher</code> / <code>fluentx123</code><br>
-        <strong class="text-green-600">All data is saved online in Google Sheets — works on mobile & syncs instantly!</strong>
+        Default: <code>teacher</code> / <code>fluentx123</code><br>
+        <strong class="text-green-600">Real-time sync • Full Edit/Delete • Mobile Friendly</strong>
       </p>
     </div>
   </div>
@@ -42,9 +42,10 @@
   <div id="mainApp" class="hidden relative">
     <!-- Sync Indicator -->
     <div class="auto-save no-print">
-      <div class="alert alert-success shadow-lg w-auto">
+      <div class="alert alert-success shadow-lg w-auto flex items-center gap-2">
         <i class="fas fa-cloud"></i>
         <span>Online Sync Active</span>
+        <button onclick="manualSync()" class="btn btn-xs btn-ghost">Refresh Now</button>
       </div>
     </div>
 
@@ -59,7 +60,6 @@
         <button onclick="openReportsModal()" class="btn btn-success">Reports</button>
         <button onclick="openFillPastModal()" class="btn btn-info btn-sm">Past</button>
         <button onclick="openChangePasswordModal()" class="btn btn-warning btn-sm">Change Password</button>
-        <button onclick="alert('Data syncs automatically to Google Sheets every few seconds.')" class="btn btn-ghost btn-sm">Sync Info</button>
         <button onclick="logout()" class="btn btn-ghost btn-sm">Logout</button>
       </div>
     </div>
@@ -93,6 +93,18 @@
     </div>
   </div>
 
+  <input type="checkbox" id="editBatchModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="editBatchModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-lg mb-4">Edit Batch Name</h3>
+      <input type="text" id="editBatchNameInput" class="input input-bordered w-full mb-4" />
+      <div class="modal-action">
+        <button onclick="saveEditedBatch()" class="btn btn-primary">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
   <input type="checkbox" id="studentModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass relative">
@@ -101,6 +113,18 @@
       <input type="text" id="newStudentName" placeholder="Student Name" class="input input-bordered w-full" />
       <div class="modal-action mt-4">
         <button onclick="addStudent()" class="btn btn-primary">Add Student</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="checkbox" id="editStudentModal" class="modal-toggle" />
+  <div class="modal" role="dialog">
+    <div class="modal-box glass relative">
+      <label for="editStudentModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
+      <h3 class="font-bold text-lg mb-4">Edit Student Name</h3>
+      <input type="text" id="editStudentNewName" class="input input-bordered w-full" placeholder="New Name" />
+      <div class="modal-action mt-4">
+        <button onclick="saveEditedStudent()" class="btn btn-primary">Save</button>
       </div>
     </div>
   </div>
@@ -188,47 +212,54 @@
   </div>
 
   <script>
-    // === IMPORTANT: PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE ===
-    const API_URL = "https://script.google.com/macros/s/AKfycbzrqrInj-AOr05TExAHL1OQEJGhd6Q2c1nPjUEeTeW8Zs4Mv0KgeIw8_eMQHOxBUFqP/exec"; // ← REPLACE WITH YOUR URL
+    // === REPLACE WITH YOUR ACTUAL WEB APP URL ===
+    const API_URL = "https://script.google.com/macros/s/AKfycby_mj2mS1kZDTUqaD6t3OWYYS7D6Z-lmdF7FBCNEzmmZEOsd2_nK38MhtmwhfTg4LG1jg/exec";
 
     let db = { batches: {} };
     let currentBatch = null;
     let currentEditDate = null;
     let TEACHER_USERNAME = "teacher";
-    let TEACHER_PASSWORD = "fluentx123"; // Change this to your desired password
+    let TEACHER_PASSWORD = "fluentx123";
 
-    // Generic API call
+    let tempEditBatchOldName = null;
+    let tempEditStudentOldName = null;
+
     async function fetchAPI(action, params = {}, postData = null) {
-  const url = new URL(API_URL);
-  url.searchParams.append('action', action);
-  Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+      const url = new URL(API_URL);
+      url.searchParams.append('action', action);
+      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
 
-  const options = {
-    method: postData ? 'POST' : 'GET',
-    redirect: 'follow',
-    headers: postData ? { 'Content-Type': 'text/plain' } : {}  // ← This avoids CORS preflight issues
-  };
-  if (postData) options.body = JSON.stringify(postData);
+      const options = {
+        method: postData ? 'POST' : 'GET',
+        redirect: 'follow',
+        headers: postData ? { 'Content-Type': 'text/plain' } : {}
+      };
+      if (postData) options.body = JSON.stringify(postData);
 
-  const res = await fetch(url, options);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text}`);
-  }
-  return await res.json();
-}
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      return await res.json();
+    }
 
-    // Load all data from Google Sheets
-    async function loadData() {
+    async function loadData(silent = false) {
       try {
         const result = await fetchAPI('getAll');
-        if (result.error) throw result.error;
+        if (result.error) throw new Error(result.error);
         db.batches = result || { batches: {} };
         renderBatches();
         populateReportSelects();
+        if (currentBatch) renderAttendanceTable();
       } catch (e) {
-        alert("Error loading data: " + e.message);
+        if (!silent) alert("Sync error: " + e.message);
       }
+    }
+
+    async function manualSync() {
+      await loadData();
+      alert("Data refreshed instantly!");
     }
 
     async function login() {
@@ -238,9 +269,6 @@
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('mainApp').classList.remove('hidden');
         await loadData();
-        if (Object.keys(db.batches).length > 0) {
-          selectBatch(Object.keys(db.batches)[0]);
-        }
       } else {
         alert("Wrong username or password!");
       }
@@ -265,6 +293,40 @@
       document.getElementById('batchModal').checked = false;
     }
 
+    function openEditBatchModal(oldName) {
+      tempEditBatchOldName = oldName;
+      document.getElementById('editBatchNameInput').value = oldName;
+      document.getElementById('editBatchModal').checked = true;
+    }
+
+    async function saveEditedBatch() {
+      const newName = document.getElementById('editBatchNameInput').value.trim();
+      if (!newName || newName === tempEditBatchOldName) {
+        document.getElementById('editBatchModal').checked = false;
+        return;
+      }
+      if (db.batches[newName]) return alert("Batch name already exists");
+
+      await fetchAPI('renameBatch', {}, { oldName: tempEditBatchOldName, newName: newName });
+      await loadData();
+      if (currentBatch === tempEditBatchOldName) currentBatch = newName;
+      document.getElementById('editBatchModal').checked = false;
+    }
+
+    async function deleteCurrentBatch() {
+      if (!currentBatch) return;
+      if (!confirm(`Delete batch "${currentBatch}" and ALL its data permanently?`)) return;
+
+      await fetchAPI('deleteBatch', { batch: currentBatch });
+      await loadData();
+      currentBatch = null;
+      document.getElementById('attendanceSection').innerHTML = `
+        <div class="text-center py-20">
+          <i class="fas fa-users text-6xl text-gray-300 mb-4"></i>
+          <p class="text-lg">Select a batch to manage attendance</p>
+        </div>`;
+    }
+
     async function addStudent() {
       if (!currentBatch) return;
       const name = document.getElementById('newStudentName').value.trim();
@@ -275,6 +337,37 @@
       renderAttendanceTable();
       document.getElementById('newStudentName').value = '';
       document.getElementById('studentModal').checked = false;
+    }
+
+    function openEditStudentModal(oldName) {
+      tempEditStudentOldName = oldName;
+      document.getElementById('editStudentNewName').value = oldName;
+      document.getElementById('editStudentModal').checked = true;
+    }
+
+    async function saveEditedStudent() {
+      const newName = document.getElementById('editStudentNewName').value.trim();
+      if (!newName || newName === tempEditStudentOldName) {
+        document.getElementById('editStudentModal').checked = false;
+        return;
+      }
+
+      await fetchAPI('renameStudent', {}, {
+        batch: currentBatch,
+        oldName: tempEditStudentOldName,
+        newName: newName
+      });
+      await loadData();
+      renderAttendanceTable();
+      document.getElementById('editStudentModal').checked = false;
+    }
+
+    async function deleteStudent(studentName) {
+      if (!confirm(`Remove "${studentName}" from this batch?`)) return;
+
+      await fetchAPI('deleteStudent', {}, { batch: currentBatch, student: studentName });
+      await loadData();
+      renderAttendanceTable();
     }
 
     function renderBatches() {
@@ -288,8 +381,15 @@
       batches.forEach(name => {
         const tab = document.createElement('a');
         tab.className = `tab tab-lifted ${currentBatch === name ? 'tab-active' : ''}`;
-        tab.textContent = name;
-        tab.onclick = () => selectBatch(name);
+        tab.innerHTML = `
+          <span>${name}</span>
+          <button class="ml-2 btn btn-xs btn-ghost" onclick="event.stopPropagation(); openEditBatchModal('${name}')">
+            <i class="fas fa-edit"></i>
+          </button>
+        `;
+        tab.onclick = (e) => {
+          if (!e.target.closest('button')) selectBatch(name);
+        };
         container.appendChild(tab);
       });
     }
@@ -304,20 +404,28 @@
       if (!currentBatch) return;
       const batch = db.batches[currentBatch];
       const today = new Date().toISOString().split('T')[0];
-      if (!batch.attendance[today]) batch.attendance[today] = {};
 
       const html = `
         <div class="flex justify-between items-center mb-6">
           <h2 class="text-3xl font-bold">${currentBatch}</h2>
-          <button onclick="document.getElementById('studentModal').checked=true; document.getElementById('modalBatchName').textContent=currentBatch" class="btn btn-outline">Add Student</button>
+          <div class="flex gap-2">
+            <button onclick="document.getElementById('studentModal').checked=true; document.getElementById('modalBatchName').textContent=currentBatch" class="btn btn-outline btn-sm">Add Student</button>
+            <button onclick="deleteCurrentBatch()" class="btn btn-error btn-sm">Delete Batch</button>
+          </div>
         </div>
         <div class="overflow-x-auto">
           <table class="table table-zebra">
-            <thead><tr><th>#</th><th>Name</th><th>Status</th></tr></thead>
+            <thead><tr><th>#</th><th>Student Name</th><th>Actions</th><th>Status (Today)</th></tr></thead>
             <tbody>
               ${batch.students.map((s, i) => {
-                const st = batch.attendance[today][s] || 'absent';
-                return `<tr><td>${i+1}</td><td>${s}</td>
+                const st = (batch.attendance[today] || {})[s] || 'absent';
+                return `<tr>
+                  <td>${i+1}</td>
+                  <td class="font-medium">${s}</td>
+                  <td class="flex gap-1">
+                    <button class="btn btn-xs btn-ghost" onclick="openEditStudentModal('${s}')"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-xs btn-ghost text-error" onclick="deleteStudent('${s}')"><i class="fas fa-trash"></i></button>
+                  </td>
                   <td><div class="btn-group">
                     <button class="btn btn-xs ${st==='present'?'btn-success':''}" onclick="markStatus('${s}','present')">Present</button>
                     <button class="btn btn-xs ${st==='absent'?'btn-error':''}" onclick="markStatus('${s}','absent')">Absent</button>
@@ -334,14 +442,15 @@
 
     async function markStatus(student, status) {
       const today = new Date().toISOString().split('T')[0];
-      db.batches[currentBatch].attendance[today] = db.batches[currentBatch].attendance[today] || {};
-      db.batches[currentBatch].attendance[today][student] = status;
+      const attendanceObj = db.batches[currentBatch].attendance[today] || {};
+      attendanceObj[student] = status;
 
       await fetchAPI('markAttendance', {}, {
         batch: currentBatch,
         date: today,
-        attendance: db.batches[currentBatch].attendance[today]
+        attendance: attendanceObj
       });
+      await loadData(true);
       renderAttendanceTable();
     }
 
@@ -349,11 +458,11 @@
       const oldp = document.getElementById('oldPassword').value;
       const newp = document.getElementById('newPassword').value;
       const conf = document.getElementById('confirmPassword').value;
-      
+
       if (oldp !== TEACHER_PASSWORD) return alert("Wrong current password");
       if (newp !== conf) return alert("Passwords don't match");
       if (newp.length < 6) return alert("Password too short");
-      
+
       TEACHER_PASSWORD = newp;
       alert("Password updated successfully! Remember your new password.");
       document.getElementById('changePasswordModal').checked = false;
@@ -392,7 +501,7 @@
     window.setPastStatus = async function(student, status) {
       db.batches[currentBatch].attendance[currentEditDate] = db.batches[currentBatch].attendance[currentEditDate] || {};
       db.batches[currentBatch].attendance[currentEditDate][student] = status;
-      await loadPastAttendance(); // refresh UI
+      await loadPastAttendance();
     };
 
     async function savePastAttendance() {
@@ -547,23 +656,16 @@
       URL.revokeObjectURL(url);
     }
 
-    // Button handlers
     document.getElementById('addBatchBtn').onclick = () => document.getElementById('batchModal').checked = true;
 
-    // Auto sync every 30 seconds (for multi-device use)
+    // Fast auto-sync every 10 seconds (only when tab visible)
     setInterval(async () => {
-      if (!document.getElementById('mainApp').classList.contains('hidden')) {
-        await loadData();
-        if (currentBatch) renderAttendanceTable();
+      if (document.visibilityState === 'visible' && !document.getElementById('mainApp').classList.contains('hidden')) {
+        await loadData(true);
       }
-    }, 30000);
+    }, 10000);
 
-    // Initial load
-    window.onload = async () => {
-      // Nothing — login will trigger loadData
-    };
+    window.onload = () => {};
   </script>
 </body>
 </html>
-
-
