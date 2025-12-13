@@ -419,7 +419,7 @@
 
   <script>
     // === REPLACE WITH YOUR ACTUAL WEB APP URL ===
-    const API_URL = "https://script.google.com/macros/s/AKfycby_mj2mS1kZDTUqaD6t3OWYYS7D6Z-lmdF7FBCNEzmmZEOsd2_nK38MhtmwhfTg4LG1jg/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbxnRssqwyXO39ykafnAU1DUEUUemKhKFdoQgt0Eu1ycqKpm_fc-6mUlQAs9a9Va3fAQ6Q/exec";
 
     // Core Data & State
     let db = { batches: {} };
@@ -678,13 +678,13 @@
         if (batch.attendance) {
           Object.keys(batch.attendance).forEach(date => {
             const dateAttendance = batch.attendance[date];
-            const uniqueEntries = {};
-            
-            Object.keys(dateAttendance).forEach(student => {
-              uniqueEntries[student] = dateAttendance[student];
-            });
-            
-            batch.attendance[date] = uniqueEntries;
+            if (typeof dateAttendance === 'object' && dateAttendance !== null) {
+              const uniqueEntries = {};
+              Object.keys(dateAttendance).forEach(student => {
+                uniqueEntries[student] = dateAttendance[student];
+              });
+              batch.attendance[date] = uniqueEntries;
+            }
           });
         }
       });
