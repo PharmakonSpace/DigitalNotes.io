@@ -27,24 +27,24 @@
       <h1 class="text-3xl font-bold gradient-text bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
         SG FluentX Attendance
       </h1>
-      <p class="text-sm text-gray-600 mb-6">Reading credentials from .env file...</p>
+      <p class="text-sm text-gray-600 mb-6">Teacher Login Required</p>
       <input type="text" id="username" class="input input-bordered w-full mb-4" placeholder="Username" />
       <input type="password" id="password" class="input input-bordered w-full mb-6" placeholder="Password"/>
       <button onclick="login()" class="btn btn-primary w-full">Login as Teacher</button>
-      <p class="text-xs text-gray-500 mt-4">
-        Create <code>.env</code> file in same folder:<br>
-        USERNAME=teacher<br>PASSWORD=yourpassword
+      <p class="text-xs text-gray-500 mt-6">
+        Default credentials: <code>teacher</code> / <code>fluentx123</code><br>
+        <strong class="text-green-600">All data is saved online in Google Sheets — works on mobile & syncs instantly!</strong>
       </p>
     </div>
   </div>
 
   <!-- Main App -->
   <div id="mainApp" class="hidden relative">
-    <!-- Auto Save Indicator -->
+    <!-- Sync Indicator -->
     <div class="auto-save no-print">
       <div class="alert alert-success shadow-lg w-auto">
-        <i class="fas fa-save"></i>
-        <span>Auto Save Active</span>
+        <i class="fas fa-cloud"></i>
+        <span>Online Sync Active</span>
       </div>
     </div>
 
@@ -55,10 +55,11 @@
         </h1>
       </div>
       <div class="flex-none gap-2">
+        <a href="index.html" class="btn btn-info btn-sm">Student Lessons</a>
         <button onclick="openReportsModal()" class="btn btn-success">Reports</button>
         <button onclick="openFillPastModal()" class="btn btn-info btn-sm">Past</button>
         <button onclick="openChangePasswordModal()" class="btn btn-warning btn-sm">Change Password</button>
-        <button onclick="manualSave()" class="btn btn-accent btn-sm">Save Now</button>
+        <button onclick="alert('Data syncs automatically to Google Sheets every few seconds.')" class="btn btn-ghost btn-sm">Sync Info</button>
         <button onclick="logout()" class="btn btn-ghost btn-sm">Logout</button>
       </div>
     </div>
@@ -83,7 +84,7 @@
   <input type="checkbox" id="batchModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass relative">
-      <label for="batchModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <label for="batchModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
       <h3 class="font-bold text-lg mb-4">Create New Batch</h3>
       <input type="text" id="newBatchName" placeholder="e.g. Morning 7AM Batch" class="input input-bordered w-full" />
       <div class="modal-action">
@@ -95,7 +96,7 @@
   <input type="checkbox" id="studentModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass relative">
-      <label for="studentModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <label for="studentModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
       <h3 class="font-bold text-lg mb-4">Add Student to <span id="modalBatchName"></span></h3>
       <input type="text" id="newStudentName" placeholder="Student Name" class="input input-bordered w-full" />
       <div class="modal-action mt-4">
@@ -107,7 +108,7 @@
   <input type="checkbox" id="pastAttendanceModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass max-w-4xl relative">
-      <label for="pastAttendanceModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <label for="pastAttendanceModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
       <h3 class="font-bold text-xl mb-4">Fill Past Attendance</h3>
       <div class="flex gap-4 items-end mb-6">
         <input type="date" id="pastDatePicker" class="input input-bordered flex-1" />
@@ -123,13 +124,13 @@
   <input type="checkbox" id="changePasswordModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass relative">
-      <label for="changePasswordModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <label for="changePasswordModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
       <h3 class="font-bold text-lg mb-4">Change Teacher Password</h3>
       <input type="password" id="oldPassword" placeholder="Current Password" class="input input-bordered w-full mb-3"/>
       <input type="password" id="newPassword" placeholder="New Password" class="input input-bordered w-full mb-3"/>
       <input type="password" id="confirmPassword" placeholder="Confirm New Password" class="input input-bordered w-full mb-4"/>
       <div class="modal-action">
-        <button onclick="changePassword()" class="btn btn-primary w-full">Update & Download .env</button>
+        <button onclick="changePassword()" class="btn btn-primary w-full">Update Password</button>
       </div>
     </div>
   </div>
@@ -138,7 +139,7 @@
   <input type="checkbox" id="reportsModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass max-w-6xl max-h-screen overflow-y-auto relative">
-      <label for="reportsModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <label for="reportsModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
       <h3 class="font-bold text-2xl mb-6 text-center">Attendance Reports</h3>
       <div class="tabs tabs-boxed mb-6">
         <a class="tab tab-active" onclick="showReportTab('batch')">Batch Summary</a>
@@ -169,7 +170,7 @@
         </div>
       </div>
       <div class="modal-action mt-6">
-        <button onclick="window.print()" class="btn btn-outline">Print</button>
+        <button onclick="window.print()" class="btn btn-outline">Print / Save PDF</button>
       </div>
     </div>
   </div>
@@ -178,98 +179,64 @@
   <input type="checkbox" id="individualReportModal" class="modal-toggle" />
   <div class="modal" role="dialog">
     <div class="modal-box glass max-w-4xl max-h-screen overflow-y-auto relative">
-      <label for="individualReportModal" class="btn btn-sm btn-circle absolute right-4 top-4">X</label>
+      <label for="individualReportModal" class="btn btn-sm btn-circle absolute right-4 top-4">✕</label>
       <div id="individualReportContent"></div>
       <div class="modal-action">
-        <button onclick="window.print()" class="btn btn-outline">Print</button>
+        <button onclick="window.print()" class="btn btn-outline">Print / Save PDF</button>
       </div>
     </div>
   </div>
 
   <script>
+    // === IMPORTANT: PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE ===
+    const API_URL = "https://script.google.com/macros/s/AKfycbzrqrInj-AOr05TExAHL1OQEJGhd6Q2c1nPjUEeTeW8Zs4Mv0KgeIw8_eMQHOxBUFqP/exec"; // ← REPLACE WITH YOUR URL
+
     let db = { batches: {} };
     let currentBatch = null;
     let currentEditDate = null;
-    let TEACHER_USERNAME = null;
-    let TEACHER_PASSWORD = null;
-    let fileHandle = null;
+    let TEACHER_USERNAME = "teacher";
+    let TEACHER_PASSWORD = "fluentx123"; // Change this to your desired password
 
-    // Load credentials from .env file
-    async function loadCredentials() {
-      try {
-        const response = await fetch('.env?t=' + Date.now());
-        if (response.ok) {
-          const text = await response.text();
-          text.split('\n').forEach(line => {
-            line = line.trim();
-            if (line.startsWith('USERNAME=')) TEACHER_USERNAME = line.split('=')[1].trim().replace(/['"]/g, '');
-            if (line.startsWith('PASSWORD=')) TEACHER_PASSWORD = line.split('=')[1].trim().replace(/['"]/g, '');
-          });
-        }
-      } catch (e) { }
-      
-      if (!TEACHER_USERNAME || !TEACHER_PASSWORD) {
-        TEACHER_USERNAME = "teacher";
-        TEACHER_PASSWORD = "fluentx123";
-      }
-      document.getElementById('username').value = TEACHER_USERNAME;
+    // Generic API call
+    async function fetchAPI(action, params = {}, postData = null) {
+      const url = new URL(API_URL);
+      url.searchParams.append('action', action);
+      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+
+      const options = {
+        method: postData ? 'POST' : 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      };
+      if (postData) options.body = JSON.stringify(postData);
+
+      const res = await fetch(url, options);
+      if (!res.ok) throw new Error("Network error");
+      return await res.json();
     }
 
-    // Save to file using File System Access API
-    async function saveToFile() {
+    // Load all data from Google Sheets
+    async function loadData() {
       try {
-        if (!fileHandle) {
-          const dirHandle = await window.showDirectoryPicker();
-          fileHandle = await dirHandle.getFileHandle('attendance_data.json', { create: true });
-        }
-        const data = JSON.stringify(db, null, 2);
-        const writable = await fileHandle.createWritable();
-        await writable.write(data);
-        await writable.close();
+        const result = await fetchAPI('getAll');
+        if (result.error) throw result.error;
+        db.batches = result || { batches: {} };
+        renderBatches();
+        populateReportSelects();
       } catch (e) {
-        // Fallback download
-        const data = JSON.stringify(db, null, 2);
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'attendance_data.json';
-        a.click();
-        URL.revokeObjectURL(url);
+        alert("Error loading data: " + e.message);
       }
     }
 
-    function manualSave() {
-      saveToFile();
-      alert("Data saved successfully!");
-    }
-
-    // Auto save every 10 seconds
-    setInterval(() => {
-      if (document.getElementById('mainApp').classList.contains('hidden')) return;
-      saveToFile();
-    }, 10000);
-
-    function loadData() {
-      const saved = localStorage.getItem('sg_attendance_data');
-      if (saved) {
-        try { db = JSON.parse(saved); } catch(e) { db = { batches: {} }; }
-      }
-      renderBatches();
-    }
-
-    function saveData() {
-      localStorage.setItem('sg_attendance_data', JSON.stringify(db));
-    }
-
-    function login() {
+    async function login() {
       const user = document.getElementById('username').value.trim();
       const pass = document.getElementById('password').value;
       if (user === TEACHER_USERNAME && pass === TEACHER_PASSWORD) {
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('mainApp').classList.remove('hidden');
-        loadData();
-        if (Object.keys(db.batches).length > 0) selectBatch(Object.keys(db.batches)[0]);
+        await loadData();
+        if (Object.keys(db.batches).length > 0) {
+          selectBatch(Object.keys(db.batches)[0]);
+        }
       } else {
         alert("Wrong username or password!");
       }
@@ -282,27 +249,25 @@
       }
     }
 
-    function createBatch() {
+    async function createBatch() {
       const name = document.getElementById('newBatchName').value.trim();
       if (!name) return alert("Enter batch name");
       if (db.batches[name]) return alert("Batch already exists");
-      
-      db.batches[name] = { students: [], attendance: {} };
-      saveData();
-      renderBatches();
+
+      await fetchAPI('createBatch', { batch: name });
+      await loadData();
       selectBatch(name);
       document.getElementById('newBatchName').value = '';
       document.getElementById('batchModal').checked = false;
     }
 
-    function addStudent() {
+    async function addStudent() {
       if (!currentBatch) return;
       const name = document.getElementById('newStudentName').value.trim();
       if (!name) return alert("Enter student name");
-      if (db.batches[currentBatch].students.includes(name)) return alert("Already added");
-      
-      db.batches[currentBatch].students.push(name);
-      saveData();
+
+      await fetchAPI('addStudent', {}, { batch: currentBatch, student: name });
+      await loadData();
       renderAttendanceTable();
       document.getElementById('newStudentName').value = '';
       document.getElementById('studentModal').checked = false;
@@ -325,13 +290,13 @@
       });
     }
 
-    function selectBatch(name) {
+    async function selectBatch(name) {
       currentBatch = name;
       renderBatches();
       renderAttendanceTable();
     }
 
-    function renderAttendanceTable() {
+    async function renderAttendanceTable() {
       if (!currentBatch) return;
       const batch = db.batches[currentBatch];
       const today = new Date().toISOString().split('T')[0];
@@ -363,11 +328,16 @@
       document.getElementById('attendanceSection').innerHTML = html;
     }
 
-    function markStatus(student, status) {
+    async function markStatus(student, status) {
       const today = new Date().toISOString().split('T')[0];
       db.batches[currentBatch].attendance[today] = db.batches[currentBatch].attendance[today] || {};
       db.batches[currentBatch].attendance[today][student] = status;
-      saveData();
+
+      await fetchAPI('markAttendance', {}, {
+        batch: currentBatch,
+        date: today,
+        attendance: db.batches[currentBatch].attendance[today]
+      });
       renderAttendanceTable();
     }
 
@@ -381,17 +351,7 @@
       if (newp.length < 6) return alert("Password too short");
       
       TEACHER_PASSWORD = newp;
-      
-      const env = `USERNAME=${TEACHER_USERNAME}\nPASSWORD=${newp}`;
-      const blob = new Blob([env], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '.env';
-      a.click();
-      URL.revokeObjectURL(url);
-      
-      alert("New .env file downloaded! Replace the old one.");
+      alert("Password updated successfully! Remember your new password.");
       document.getElementById('changePasswordModal').checked = false;
     }
 
@@ -401,13 +361,15 @@
       document.getElementById('pastAttendanceTable').innerHTML = '<p class="text-center py-8 text-gray-500">Select a date and click Load</p>';
     }
 
-    function loadPastAttendance() {
+    async function loadPastAttendance() {
       const date = document.getElementById('pastDatePicker').value;
       if (!date || !currentBatch) return alert("Select batch and date");
       currentEditDate = date;
+
+      const result = await fetchAPI('getAttendance', { batch: currentBatch, date });
+      const record = result.attendance || {};
+
       const batch = db.batches[currentBatch];
-      const record = batch.attendance[date] || {};
-      
       const html = `<h4 class="font-bold text-lg mb-4">Editing: ${new Date(date).toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</h4>
         <table class="table table-zebra"><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody>
           ${batch.students.map(s => {
@@ -423,49 +385,54 @@
       document.getElementById('pastAttendanceTable').innerHTML = html;
     }
 
-    window.setPastStatus = function(student, status) {
+    window.setPastStatus = async function(student, status) {
       db.batches[currentBatch].attendance[currentEditDate] = db.batches[currentBatch].attendance[currentEditDate] || {};
       db.batches[currentBatch].attendance[currentEditDate][student] = status;
-      loadPastAttendance();
+      await loadPastAttendance(); // refresh UI
     };
 
-    function savePastAttendance() {
-      saveData();
+    async function savePastAttendance() {
+      await fetchAPI('markAttendance', {}, {
+        batch: currentBatch,
+        date: currentEditDate,
+        attendance: db.batches[currentBatch].attendance[currentEditDate]
+      });
       alert("Saved for " + currentEditDate);
     }
 
-    function openReportsModal() {
+    async function openReportsModal() {
       document.getElementById('reportsModal').checked = true;
-      populateReportSelects();
+      await populateReportSelects();
       showReportTab('batch');
     }
 
     function showReportTab(tab) {
       ['batchReport', 'studentReport', 'rangeReport'].forEach(id => document.getElementById(id).classList.add('hidden'));
       document.getElementById(tab + 'Report').classList.remove('hidden');
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('tab-active'));
+      document.querySelectorAll('#reportsModal .tab').forEach(t => t.classList.remove('tab-active'));
       event.target.classList.add('tab-active');
       if (tab === 'batch') generateBatchReport();
       if (tab === 'student') loadStudentsForReport();
     }
 
-    function populateReportSelects() {
-      ['reportBatchSelect', 'studentBatchSelect', 'rangeBatchSelect'].forEach(id => {
+    async function populateReportSelects() {
+      const selects = ['reportBatchSelect', 'studentBatchSelect', 'rangeBatchSelect'];
+      for (const id of selects) {
         const select = document.getElementById(id);
         select.innerHTML = '<option value="">Select Batch</option>';
-        Object.keys(db.batches).forEach(name => {
+        Object.keys(db.batches).sort().forEach(name => {
           const opt = document.createElement('option');
           opt.value = name; opt.textContent = name;
           select.appendChild(opt);
         });
-      });
+      }
     }
 
-    function loadStudentsForReport() {
+    async function loadStudentsForReport() {
       const batchName = document.getElementById('studentBatchSelect').value;
       const select = document.getElementById('studentSelect');
       select.innerHTML = '<option value="">Select Student</option>';
-      if (batchName) {
+      if (batchName && db.batches[batchName]) {
         db.batches[batchName].students.forEach(s => {
           const opt = document.createElement('option');
           opt.value = s; opt.textContent = s;
@@ -535,12 +502,12 @@
       const batch = db.batches[batchName];
       const dates = Object.keys(batch.attendance).sort().reverse();
       let p=0,l=0,e=0,a=0;
-      let table = `<h3 class="text-3xl font-bold mb-4">${studentName}'s Report - ${batchName}</h3>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">`;
       dates.forEach(d => {
         const st = batch.attendance[d][studentName] || 'absent';
         if(st==='present')p++; else if(st==='late')l++; else if(st==='early')e++; else a++;
       });
+      let table = `<h3 class="text-3xl font-bold mb-4">${studentName}'s Report - ${batchName}</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">`;
       table += `<div class="stat glass"><div class="stat-title">Present</div><div class="stat-value text-success">${p}</div></div>
       <div class="stat glass"><div class="stat-title">Late</div><div class="stat-value text-warning">${l}</div></div>
       <div class="stat glass"><div class="stat-title">Early Leave</div><div class="stat-value text-secondary">${e}</div></div>
@@ -565,20 +532,31 @@
           b.students.forEach(s => {
             const st = b.attendance[d][s] || 'absent';
             const text = st === 'present' ? 'Present' : st === 'late' ? 'Late' : st === 'early' ? 'Early Leave' : 'Absent';
-            csv += `${bn},${d},${s},${text}\n`;
+            csv += `"${bn}","${d}","${s}","${text}"\n`;
           });
         });
       });
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = "SGFluentX_All_Attendance.csv"; a.click();
+      const a = document.createElement('a');
+      a.href = url; a.download = "SGFluentX_All_Attendance.csv"; a.click();
+      URL.revokeObjectURL(url);
     }
 
+    // Button handlers
     document.getElementById('addBatchBtn').onclick = () => document.getElementById('batchModal').checked = true;
 
+    // Auto sync every 30 seconds (for multi-device use)
+    setInterval(async () => {
+      if (!document.getElementById('mainApp').classList.contains('hidden')) {
+        await loadData();
+        if (currentBatch) renderAttendanceTable();
+      }
+    }, 30000);
+
+    // Initial load
     window.onload = async () => {
-      await loadCredentials();
-      loadData();
+      // Nothing — login will trigger loadData
     };
   </script>
 </body>
