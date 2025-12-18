@@ -1050,12 +1050,12 @@
                         </h1>
 
 	<div class="mt-4 flex gap-3">
-    <a id="downloadPdfBtn"
-       class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0 shadow-md hidden"
-       download>
+    <button id="downloadPdfBtn"
+            class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0 shadow-md hidden flex items-center"
+            onclick="forceDownloadPdf()">
         <i class="fas fa-download mr-2"></i>
-        Download
-    </a>
+        Download PDF
+    </button>
 </div>
 
 						
@@ -1804,11 +1804,44 @@ loadChapter = async function(id) {
     setTimeout(updatePdfButton, 300);  // Reduced delay – faster response
 };
 </script>
+<script>
+async function forceDownloadPdf() {
+    const pdfLink = document.getElementById('downloadPdfBtn').dataset.pdfUrl; // We'll set this
+    if (!pdfLink) return;
 
+    try {
+        const response = await fetch(pdfLink);
+        if (!response.ok) throw new Error('Download failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = pdfLink.split('/').pop(); // Uses filename like "Present Perfect Progressive.pdf"
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (err) {
+        alert('Download failed. Please try again.');
+        console.error(err);
+    }
+}
+
+// Update your existing updatePdfButton() — add this line when PDF exists:
+if (response.ok) {
+    pdfBtn.href = '#'; // Prevent default navigation
+    pdfBtn.dataset.pdfUrl = pdfLink; // Store URL for JS
+    pdfBtn.download = ''; // Clear (not needed anymore)
+    pdfBtn.classList.remove("hidden");
+}
+</script>
 
 </body>
 
 </html>
+
 
 
 
