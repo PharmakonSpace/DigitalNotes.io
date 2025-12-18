@@ -1049,12 +1049,14 @@
                             <i class="fas fa-book-open text-5xl lg:text-7xl opacity-10"></i>  Welcome to SG FluentX
                         </h1>
 
-	<a id="downloadPdfBtn"
-   class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0 shadow-md hidden"
-   download>
-    <i class="fas fa-download mr-2"></i>
-    Download PDF
-</a>
+	<div class="mt-4 flex gap-3">
+    <a id="downloadPdfBtn"
+       class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0 shadow-md hidden"
+       download>
+        <i class="fas fa-download mr-2"></i>
+        Download
+    </a>
+</div>
 
 						
                         <p id="chapterSubtitle" class="text-base lg:text-lg text-gray-600 dark:text-gray-400">Select a chapter from the curriculum to begin your English mastery journey
@@ -1748,29 +1750,27 @@ document.addEventListener("click", function (e) {
 	
 </script>
 <script>
-// PDF Download Button Logic - Fixed Version
+// PDF Download Button Logic - Fully Fixed & Optimized
 const pdfBaseUrl = "https://raw.githubusercontent.com/PharmakonSpace/DigitalNotes.io/main/download/";
 const pdfBtn = document.getElementById("downloadPdfBtn");
 
 async function updatePdfButton() {
     if (!pdfBtn) return;
 
-    // Wait until a real chapter is loaded (not the welcome screen)
     const titleElement = document.getElementById("chapterTitle");
     if (!titleElement) return;
 
     let titleText = titleElement.innerText.trim();
 
-    // Skip if it's still the welcome message
+    // Hide on welcome screen or non-chapter pages
     if (titleText.includes("Welcome to SG FluentX") || !titleText.includes("Chapter")) {
         pdfBtn.classList.add("hidden");
         return;
     }
 
-    // Clean the title: "Chapter 5: Present Simple Tense" → "Present Simple Tense"
+    // Extract clean title: "Chapter 5: Present Simple Tense" → "Present Simple Tense"
     titleText = titleText.replace(/^Chapter \d+:\s*/, '').trim();
 
-    // If title is empty or too generic, hide button
     if (!titleText || titleText.length < 3) {
         pdfBtn.classList.add("hidden");
         return;
@@ -1783,24 +1783,25 @@ async function updatePdfButton() {
         const response = await fetch(pdfLink, { method: "HEAD" });
         if (response.ok) {
             pdfBtn.href = pdfLink;
+            pdfBtn.download = pdfFileName;  // Forces download with nice filename
             pdfBtn.classList.remove("hidden");
         } else {
             pdfBtn.classList.add("hidden");
         }
     } catch (error) {
+        console.warn("PDF check failed:", error);
         pdfBtn.classList.add("hidden");
     }
 }
 
-// Run when page loads (in case user refreshes on a chapter)
+// Run on initial load (e.g., page refresh on a chapter)
 updatePdfButton();
 
-// Also run every time a new chapter is loaded
-// We override the original loadChapter success part
+// Update button every time a chapter loads
 const originalLoadChapter = loadChapter;
 loadChapter = async function(id) {
-    await originalLoadChapter(id);  // Let original function run first
-    setTimeout(updatePdfButton, 500);  // Small delay to ensure title is updated
+    await originalLoadChapter(id);
+    setTimeout(updatePdfButton, 300);  // Reduced delay – faster response
 };
 </script>
 
@@ -1808,6 +1809,7 @@ loadChapter = async function(id) {
 </body>
 
 </html>
+
 
 
 
