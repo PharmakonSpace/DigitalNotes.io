@@ -1750,20 +1750,35 @@ document.addEventListener("click", function (e) {
 });
 	
 const pdfBaseUrl = "https://raw.githubusercontent.com/PharmakonSpace/DigitalNotes.io/main/download/";
-const pdfLink = `${pdfBaseUrl}${chapterInfo.filename.replace(/\.md$/i, '.pdf')}`;
 const pdfBtn = document.getElementById("downloadPdfBtn");
 
 if (pdfBtn) {
-    pdfBtn.href = pdfLink;
+    // 1️⃣ Get visible chapter title text
+    const titleText = document.getElementById("chapterTitle").innerText
+        .replace(/^[^A-Za-z0-9]+/, '')   // remove icon chars
+        .trim();
 
+    // 2️⃣ Build PDF filename
+    const pdfFileName = `${titleText}.pdf`;
+
+    // 3️⃣ Encode for URL (handles spaces safely)
+    const pdfLink = pdfBaseUrl + encodeURIComponent(pdfFileName);
+
+    // 4️⃣ Check if PDF exists
     fetch(pdfLink, { method: "HEAD" })
         .then(res => {
-            pdfBtn.style.display = res.ok ? "inline-flex" : "none";
+            if (res.ok) {
+                pdfBtn.href = pdfLink;
+                pdfBtn.classList.remove("hidden");
+            } else {
+                pdfBtn.classList.add("hidden");
+            }
         })
         .catch(() => {
-            pdfBtn.style.display = "none";
+            pdfBtn.classList.add("hidden");
         });
 }
+
 
 
 </script>
@@ -1773,4 +1788,5 @@ if (pdfBtn) {
 </body>
 
 </html>
+
 
