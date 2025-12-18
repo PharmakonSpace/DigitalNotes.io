@@ -1051,10 +1051,11 @@
 
 	<div class="mt-4 flex gap-3">
     <button id="downloadPdfBtn"
-            class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0 shadow-md hidden flex items-center"
-            onclick="forceDownloadPdf()">
-        <i class="fas fa-download mr-2"></i>
-        Download PDF
+            class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0 shadow-md hidden flex items-center gap-2"
+            type="button">
+        <i class="fas fa-download"></i>
+        <span>Download PDF</span>
+        <div class="loading loading-spinner loading-xs hidden" id="pdfLoading"></div>
     </button>
 </div>
 
@@ -1749,10 +1750,15 @@ document.addEventListener("click", function (e) {
 });
 	
 </script>
+
+
+
+	
 <script>
-// PDF Download Button Logic - Fully Fixed & Optimized
+// PDF Download Button Logic - FINAL WORKING VERSION
 const pdfBaseUrl = "https://raw.githubusercontent.com/PharmakonSpace/DigitalNotes.io/main/download/";
 const pdfBtn = document.getElementById("downloadPdfBtn");
+const pdfLoading = document.getElementById("pdfLoading");
 
 async function updatePdfButton() {
     if (!pdfBtn) return;
@@ -1762,13 +1768,13 @@ async function updatePdfButton() {
 
     let titleText = titleElement.innerText.trim();
 
-    // Hide on welcome screen or non-chapter pages
+    // Hide on welcome screen
     if (titleText.includes("Welcome to SG FluentX") || !titleText.includes("Chapter")) {
         pdfBtn.classList.add("hidden");
         return;
     }
 
-    // Extract clean title: "Chapter 5: Present Simple Tense" → "Present Simple Tense"
+    // Clean title: "Chapter 5: Present Perfect Progressive" → "Present Perfect Progressive"
     titleText = titleText.replace(/^Chapter \d+:\s*/, '').trim();
 
     if (!titleText || titleText.length < 3) {
@@ -1782,26 +1788,69 @@ async function updatePdfButton() {
     try {
         const response = await fetch(pdfLink, { method: "HEAD" });
         if (response.ok) {
-            pdfBtn.href = pdfLink;
-            pdfBtn.download = pdfFileName;  // Forces download with nice filename
+            // Store the URL for later download
+            pdfBtn.dataset.pdfUrl = pdfLink;
+            pdfBtn.dataset.fileName = pdfFileName;
             pdfBtn.classList.remove("hidden");
         } else {
             pdfBtn.classList.add("hidden");
         }
     } catch (error) {
-        console.warn("PDF check failed:", error);
+        console.warn("PDF availability check failed:", error);
         pdfBtn.classList.add("hidden");
     }
 }
 
-// Run on initial load (e.g., page refresh on a chapter)
+// Force download using Blob (works 100%)
+async function forceDownloadPdf() {
+    const url = pdfBtn.dataset.pdfUrl;
+    const fileName = pdfBtn.dataset.fileName || "chapter.pdf";
+
+    if (!url) {
+        alert("PDF link not available.");
+        return;
+    }
+
+    // Show loading spinner
+    pdfBtn.disabled = true;
+    pdfLoading?.classList.remove("hidden");
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Download failed");
+
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+
+        // Cleanup
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+        console.error(err);
+        alert("Failed to download PDF. Please try again or right-click and save manually.");
+    } finally {
+        // Hide loading
+        pdfBtn.disabled = false;
+        pdfLoading?.classList.add("hidden");
+    }
+}
+
+// Attach click handler
+pdfBtn?.addEventListener("click", forceDownloadPdf);
+
+// Run on load and after every chapter change
 updatePdfButton();
 
-// Update button every time a chapter loads
 const originalLoadChapter = loadChapter;
 loadChapter = async function(id) {
     await originalLoadChapter(id);
-    setTimeout(updatePdfButton, 300);  // Reduced delay – faster response
+    setTimeout(updatePdfButton, 300);
 };
 </script>
 <script>
@@ -1841,6 +1890,7 @@ if (response.ok) {
 </body>
 
 </html>
+
 
 
 
