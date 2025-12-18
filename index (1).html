@@ -1045,6 +1045,16 @@
                             <span class="text-xs lg:text-sm text-gray-600 dark:text-gray-400 font-medium" id="readTime">15 min read</span>
                         </div>
                         <h1 id="chapterTitle" class="text-2xl lg:text-5xl font-bold text-gray-900 dark:text-gray-100 mb-3 lg:mb-4 leading-tight">
+							<div class="mt-4 flex gap-3">
+    <a id="downloadPdfBtn"
+       href="#"
+       target="_blank"
+       class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0 shadow-md">
+        <i class="fas fa-download mr-2"></i>
+        Download PDF
+    </a>
+</div>
+
                           <i class="fas fa-book-open text-5xl lg:text-7xl opacity-10"></i>  Welcome to SG FluentX
                         </h1>
 						
@@ -1736,9 +1746,27 @@ document.addEventListener("click", function (e) {
         e.target.classList.remove("show");
     }
 });
+	
+const pdfBaseUrl = "https://raw.githubusercontent.com/PharmakonSpace/DigitalNotes.io/main/download/";
+const pdfLink = `${pdfBaseUrl}${chapterInfo.filename.replace('.md', '.pdf')}`;
+const pdfBtn = document.getElementById("downloadPdfBtn");
+
+if (pdfBtn) {
+    pdfBtn.href = pdfLink;
+
+    fetch(pdfLink, { method: "HEAD" })
+        .then(res => {
+            pdfBtn.style.display = res.ok ? "inline-flex" : "none";
+        })
+        .catch(() => {
+            pdfBtn.style.display = "none";
+        });
+}
+
 </script>
 
 
 
 </body>
+
 </html>
