@@ -1748,45 +1748,69 @@ document.addEventListener("click", function (e) {
     }
 });
 	
+</script>
+<script>
+// PDF Download Button Logic - Fixed Version
 const pdfBaseUrl = "https://raw.githubusercontent.com/PharmakonSpace/DigitalNotes.io/main/download/";
 const pdfBtn = document.getElementById("downloadPdfBtn");
 
-if (pdfBtn) {
-    // 1️⃣ Get visible chapter title text
-    const titleText = document.getElementById("chapterTitle").innerText
-        .replace(/^[^A-Za-z0-9]+/, '')   // remove icon chars
-        .trim();
+async function updatePdfButton() {
+    if (!pdfBtn) return;
 
-    // 2️⃣ Build PDF filename
+    // Wait until a real chapter is loaded (not the welcome screen)
+    const titleElement = document.getElementById("chapterTitle");
+    if (!titleElement) return;
+
+    let titleText = titleElement.innerText.trim();
+
+    // Skip if it's still the welcome message
+    if (titleText.includes("Welcome to SG FluentX") || !titleText.includes("Chapter")) {
+        pdfBtn.classList.add("hidden");
+        return;
+    }
+
+    // Clean the title: "Chapter 5: Present Simple Tense" → "Present Simple Tense"
+    titleText = titleText.replace(/^Chapter \d+:\s*/, '').trim();
+
+    // If title is empty or too generic, hide button
+    if (!titleText || titleText.length < 3) {
+        pdfBtn.classList.add("hidden");
+        return;
+    }
+
     const pdfFileName = `${titleText}.pdf`;
-
-    // 3️⃣ Encode for URL (handles spaces safely)
     const pdfLink = pdfBaseUrl + encodeURIComponent(pdfFileName);
 
-    // 4️⃣ Check if PDF exists
-    fetch(pdfLink, { method: "HEAD" })
-        .then(res => {
-            if (res.ok) {
-                pdfBtn.href = pdfLink;
-                pdfBtn.classList.remove("hidden");
-            } else {
-                pdfBtn.classList.add("hidden");
-            }
-        })
-        .catch(() => {
+    try {
+        const response = await fetch(pdfLink, { method: "HEAD" });
+        if (response.ok) {
+            pdfBtn.href = pdfLink;
+            pdfBtn.classList.remove("hidden");
+        } else {
             pdfBtn.classList.add("hidden");
-        });
+        }
+    } catch (error) {
+        pdfBtn.classList.add("hidden");
+    }
 }
 
+// Run when page loads (in case user refreshes on a chapter)
+updatePdfButton();
 
-
+// Also run every time a new chapter is loaded
+// We override the original loadChapter success part
+const originalLoadChapter = loadChapter;
+loadChapter = async function(id) {
+    await originalLoadChapter(id);  // Let original function run first
+    setTimeout(updatePdfButton, 500);  // Small delay to ensure title is updated
+};
 </script>
-
 
 
 </body>
 
 </html>
+
 
 
 
